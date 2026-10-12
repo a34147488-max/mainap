@@ -109,12 +109,14 @@ http.createServer(async (req, res) => {
       const collision = username && [...registeredPlayers.values()].find(p => p.username === username && p.id !== clientId);
       if (collision) { res.writeHead(409); return res.end(JSON.stringify({ error: "Этот username уже занят." })); }
       const previous = registeredPlayers.get(clientId);
+      const pendingCredits = previous ? Math.max(0, Number(previous.pendingCredits)||0) : 0;
+      const creditedBalance = Math.round((balance + pendingCredits) * 1000) / 1000;
       const inviterId = referredBy ? ([...registeredPlayers.values()].find(p => p.id === referredBy || (p.telegramId && p.telegramId === referredBy)) || {}).id : "";
       const resolvedInviterId = previous ? (previous.referredBy || "") : (inviterId && inviterId !== clientId ? inviterId : "");
       if (!previous && resolvedInviterId && !referredPlayerIds.has(clientId)) {
         referredPlayerIds.add(clientId);
         const inviter = registeredPlayers.get(resolvedInviterId);
-        if (inviter) inviter.referrals = (inviter.referrals || 0) + 1;
+        if (inviter) { inviter.referrals = (inviter.referrals || 0) + 1; inviter.pendingCredits = Math.round(((Number(inviter.pendingCredits)||0)+5000)*1000)/1000; }
       }
       registeredPlayers.set(clientId, {
         id: clientId,
@@ -124,7 +126,8 @@ http.createServer(async (req, res) => {
         telegramId: telegramId || (previous ? previous.telegramId || "" : ""),
         photoUrl: safePhotoUrl || (previous ? previous.photoUrl || "" : ""),
         referrals: previous ? (previous.referrals || 0) : 0,
-        balance: Math.round(balance * 1000) / 1000,
+        balance: creditedBalance,
+        pendingCredits: 0,
         totalWon: previous ? Math.max(previous.totalWon || 0, Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000)) : Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000),
         registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
         lastSeen: Date.now()
@@ -141,7 +144,7 @@ http.createServer(async (req, res) => {
       }
       persistPlayerData();
       res.writeHead(200);
-      return res.end(JSON.stringify({ registered: true, referrals: registeredPlayers.get(clientId).referrals || 0 }));
+      return res.end(JSON.stringify({ registered: true, referrals: registeredPlayers.get(clientId).referrals || 0, balance: registeredPlayers.get(clientId).balance }));
     });
     return;
   }
@@ -236,9 +239,15 @@ http.createServer(async (req, res) => {
         res.writeHead(200); return res.end(JSON.stringify({success:true,balance:player.balance,returnedAmount:item.amount}));
       }
       if (action==="complete") {
+        const buyerUsername=String(input.buyerUsername||"").trim().replace(/^@/,"").toLowerCase();
+        if(!/^[a-z0-9_]{3,20}$/.test(buyerUsername)){res.writeHead(400);return res.end(JSON.stringify({error:"Укажи корректный Telegram username покупателя."}));}
+        const buyer=[...registeredPlayers.values()].find(p=>String(p.username||"").toLowerCase()===buyerUsername);
+        if(!buyer){res.writeHead(404);return res.end(JSON.stringify({error:"Покупатель с таким username не зарегистрирован в VKcoin. Попроси его открыть приложение и зарегистрироваться."}));}
+        if(buyer.id===clientId){res.writeHead(400);return res.end(JSON.stringify({error:"Нельзя указать себя покупателем."}));}
         const [item]=marketListings.splice(idx,1);
+        buyer.pendingCredits=Math.round(((Number(buyer.pendingCredits)||0)+Number(item.amount))*1000)/1000;
         marketHistory.push({at:new Date().toISOString(),rate:item.rate,kind:"sale"}); persistPlayerData();
-        res.writeHead(200); return res.end(JSON.stringify({success:true,listing:item}));
+        res.writeHead(200); return res.end(JSON.stringify({success:true,listing:item,buyerUsername,buyerAmount:item.amount}));
       }
       res.writeHead(400); return res.end(JSON.stringify({error:"Неизвестное действие."}));
     });
