@@ -339,6 +339,12 @@ http.createServer(async (req, res) => {
     const p=registeredPlayers.get(clientId);
     if(!p){res.writeHead(404);return res.end(JSON.stringify({error:"Игрок не зарегистрирован"}))}
     const now=Date.now(), until=Number(p.premiumUntil||0), active=until>now;
+    if(active){
+      const last=Number(p.autoClickLastAt||p.premiumStartedAt||now), elapsed=Math.max(0,Math.min(now,until)-last);
+      const earned=Math.min(75000,Number(p.autoClickEarned||0)+elapsed*(75000/(7*86400000)));
+      p.autoClickEarned=earned;p.autoClickLastAt=Math.min(now,until);
+      if(earned>Number(p.autoClickEarnedSaved||0)){p.autoClickEarnedSaved=earned;persistPlayerData();}
+    }
     return res.end(JSON.stringify({active,until:active?until:0,daysLeft:active?Math.ceil((until-now)/86400000):0,autoClickEarned:Number(p.autoClickEarned||0),autoClickCap:75000,clickMultiplier:active?5:1}));
   }
   if (requestUrl.pathname === "/api/premium/claim") {
