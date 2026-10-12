@@ -58,7 +58,7 @@ http.createServer(async (req, res) => {
         username: username || (previous ? previous.username : ""),
         referredBy: previous ? previous.referredBy : (referredBy && registeredPlayers.has(referredBy) && referredBy !== clientId ? referredBy : ""),
         referrals: previous ? (previous.referrals || 0) : 0,
-        balance: previous ? previous.balance : 0,
+        balance: Math.round(balance * 1000) / 1000,
         totalWon: previous ? Math.max(previous.totalWon || 0, Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000)) : Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000),
         registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
         lastSeen: Date.now()
