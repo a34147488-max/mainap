@@ -92,7 +92,9 @@ function setupRenderer(){
 }
 function resize(){if(!renderer||!arenaEl)return;const w=Math.max(1,arenaEl.clientWidth),h=Math.max(1,arenaEl.clientHeight);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
 function hitActor(a,side){
+ if(a.blocking&&Math.random()<.78){a.health=Math.max(0,a.health-1.2);a.hit=.12;a.vel.x=side*.55;spawnBurst(a.root.position.x,1.35,0,0x62dfff);return}
  a.health=Math.max(0,a.health-(4+Math.random()*7));a.hit=.32;a.vel.x=side*2.8;a.vel.y=1.6;
+ spawnBurst(a.root.position.x,1.55,.35,a.kind==='subzero'?0x6bdfff:0xff451b);
  const other=actors.find(x=>x!==a);other.attack=.42;
  const hpId=a.kind==='subzero'?'mkSubHp':'mkScorpHp',txtId=a.kind==='subzero'?'mkSubHpText':'mkScorpHpText';
  const bar=document.getElementById(hpId),txt=document.getElementById(txtId);
@@ -103,20 +105,22 @@ function animate(now){
  if(!running||!renderer)return;raf=requestAnimationFrame(animate);
  const dt=Math.min(.035,(now-last)/1000||.016);last=now;const t=clock.getElapsedTime();
  for(const a of actors){
-  a.phase+=dt*4;a.attackCooldown-=dt;a.hit=Math.max(0,a.hit-dt);a.attack=Math.max(0,a.attack-dt);
+  a.phase+=dt*4;a.attackCooldown-=dt;a.hit=Math.max(0,a.hit-dt);a.attack=Math.max(0,a.attack-dt);a.blocking=false;
+  const enemy=actors.find(x=>x!==a);if(a.attackCooldown<.35&&Math.abs(a.root.position.x-enemy.root.position.x)<2.2&&Math.random()<.35)a.blocking=true;
+  if(a.mixer)a.mixer.update(dt);
   a.root.position.x+=a.vel.x*dt;a.root.position.y+=a.vel.y*dt;a.vel.y-=9.8*dt;
   if(a.root.position.y<0){a.root.position.y=0;a.vel.y=0;a.vel.x*=Math.pow(.06,dt)}
   a.root.position.x=clamp(a.root.position.x,-3.5,3.5);
-  a.torso.rotation.z=(a.hit>0?-.35:0)+Math.sin(a.phase)*.025;
+  if(!a.externalModel){a.torso.rotation.z=(a.hit>0?-.35:0)+Math.sin(a.phase)*.025;
   a.legs.forEach((l,i)=>{l.group.rotation.x=a.attack>0?(i===0?-.85:.35):Math.sin(a.phase+(i*Math.PI))*.12});
   a.arms.forEach((arm,i)=>{arm.group.rotation.x=a.blocking?(i===0?-1.0:-.8):a.attack>0?(i===0?-1.35:.35):Math.sin(a.phase+i)*.08;arm.group.rotation.z=a.blocking?arm.side*.25:a.attack>0?arm.side*(i===0?-.75:.2):arm.side*(.05+Math.sin(a.phase+i)*.05)});}
   if(a.attackCooldown<=0&&a.hit<=0){
-   a.attackCooldown=.8+Math.random()*1.4;
-   const victim=actors.find(x=>x!==a);
-   if(Math.abs(a.root.position.x-victim.root.position.x)<3.8&&Math.random()>.15){a.attack=.32;setTimeout(()=>{if(running&&victim.health>0)hitActor(victim,a.root.position.x<victim.root.position.x?1:-1)},170)}
+   const victim=actors.find(x=>x!==a);a.attackCooldown=.75+Math.random()*1.1;
+   if(Math.abs(a.root.position.x-victim.root.position.x)<4&&Math.random()>.12){const special=Math.random()<.22;a.attack=special?.58:.32;a.vel.x+=(a.root.position.x<victim.root.position.x?1:-1)*(special?1.6:.6);if(special)spawnBurst((a.root.position.x+victim.root.position.x)/2,1.2,-.1,a.kind==='subzero'?0x43dfff:0xff3014);setTimeout(()=>{if(running&&victim.health>0&&Math.abs(a.root.position.x-victim.root.position.x)<4.5)hitActor(victim,a.root.position.x<victim.root.position.x?1:-1)},special?260:170)}
   }
  }
  for(const e of embers){e.position.y+=Math.sin(t+e.userData.float)*dt*.3;if(e.position.y>5.5)e.position.y=-.2}
+ for(let i=bursts.length-1;i>=0;i--){const p=bursts[i];p.userData.life-=dt;p.position.addScaledVector(p.userData.v,dt);p.userData.v.y-=5*dt;p.scale.setScalar(Math.max(.01,p.userData.life));if(p.userData.life<=0){scene.remove(p);p.geometry.dispose();p.material.dispose();bursts.splice(i,1)}}
  renderer.render(scene,camera);
 }
 export function startMortal3D(){
