@@ -1,7 +1,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/GLTFLoader.js';
 
-let renderer, scene, camera, raf, resizeObserver, actors=[], running=false, last=0, arenaEl;\nconst gltfLoader=new GLTFLoader();
+let renderer, scene, camera, raf, resizeObserver, actors=[], running=false, last=0, arenaEl;
+const gltfLoader=new GLTFLoader();
 const clock = new THREE.Clock();
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
@@ -81,7 +82,10 @@ function buildArena(){
  actors[1].root.position.set(2.2,0,0);actors[1].root.rotation.y=Math.PI-.2;
  scene.add(actors[0].root,actors[1].root);
 }
-const embers=[];\nfunction spawnBurst(x,y,z,color){if(!scene)return;for(let i=0;i<10;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.035+Math.random()*.035,6,5),new THREE.MeshBasicMaterial({color}));p.position.set(x,y,z);p.userData.v=new THREE.Vector3((Math.random()-.5)*4,Math.random()*3,(Math.random()-.5)*2);p.userData.life=.35+Math.random()*.3;scene.add(p);bursts.push(p)}}\nconst bursts=[];\nasync function loadLicensedModel(kind, fallback){try{const url=kind==='subzero'?'/assets/subzero.glb':'/assets/scorpion.glb';const gltf=await gltfLoader.loadAsync(url);if(!running||!scene)return;const model=gltf.scene;model.scale.setScalar(1.6);model.position.copy(fallback.root.position);model.rotation.copy(fallback.root.rotation);scene.remove(fallback.root);scene.add(model);fallback.root=model;fallback.externalModel=true;if(gltf.animations&&gltf.animations.length){fallback.mixer=new THREE.AnimationMixer(model);fallback.clips=gltf.animations;fallback.mixer.clipAction(gltf.animations[0]).play()}}catch(e){/* Optional licensed GLB absent: keep generated fighter. */}}
+const embers=[];
+function spawnBurst(x,y,z,color){if(!scene)return;for(let i=0;i<10;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.035+Math.random()*.035,6,5),new THREE.MeshBasicMaterial({color}));p.position.set(x,y,z);p.userData.v=new THREE.Vector3((Math.random()-.5)*4,Math.random()*3,(Math.random()-.5)*2);p.userData.life=.35+Math.random()*.3;scene.add(p);bursts.push(p)}}
+const bursts=[];
+async function loadLicensedModel(kind, fallback){try{const url=kind==='subzero'?'/assets/subzero.glb':'/assets/scorpion.glb';const gltf=await gltfLoader.loadAsync(url);if(!running||!scene)return;const model=gltf.scene;model.scale.setScalar(1.6);model.position.copy(fallback.root.position);model.rotation.copy(fallback.root.rotation);scene.remove(fallback.root);scene.add(model);fallback.root=model;fallback.externalModel=true;if(gltf.animations&&gltf.animations.length){fallback.mixer=new THREE.AnimationMixer(model);fallback.clips=gltf.animations;fallback.mixer.clipAction(gltf.animations[0]).play()}}catch(e){/* Optional licensed GLB absent: keep generated fighter. */}}
 function setupRenderer(){
  renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.7));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
