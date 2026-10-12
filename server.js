@@ -112,7 +112,7 @@ http.createServer(async (req, res) => {
         id: clientId,
         name: username ? "@" + username : (previous ? previous.name : name),
         username: username || (previous ? previous.username : ""),
-        referredBy: previous ? previous.referredBy : (inviterId && inviterId !== clientId ? inviterId : ""),
+        referredBy: previous ? previous.referredBy : (referredBy && referredBy !== clientId ? (inviterId || referredBy) : ""),
         telegramId: telegramId || (previous ? previous.telegramId || "" : ""),
         photoUrl: safePhotoUrl || (previous ? previous.photoUrl || "" : ""),
         referrals: previous ? (previous.referrals || 0) : 0,
@@ -121,6 +121,16 @@ http.createServer(async (req, res) => {
         registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
         lastSeen: Date.now()
       });
+      // Resolve referrals that arrived before the inviter registered.
+      const newlyRegistered = registeredPlayers.get(clientId);
+      for (const referred of registeredPlayers.values()) {
+        if (referred.id !== clientId && referred.referredBy && !referredPlayerIds.has(referred.id) &&
+            (referred.referredBy === clientId || (newlyRegistered.telegramId && referred.referredBy === newlyRegistered.telegramId))) {
+          referred.referredBy = clientId;
+          referredPlayerIds.add(referred.id);
+          newlyRegistered.referrals = (newlyRegistered.referrals || 0) + 1;
+        }
+      }
       persistPlayerData();
       res.writeHead(200);
       return res.end(JSON.stringify({ registered: true, referrals: registeredPlayers.get(clientId).referrals || 0 }));
