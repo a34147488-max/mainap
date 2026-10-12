@@ -40,7 +40,8 @@ http.createServer(async (req, res) => {
 
     try {
       const normalizedUrl = configuredUrl.replace(/\/+$/, "");
-        ? configuredUrl
+      const apiUrl = normalizedUrl.endsWith("/api/vkcoin/external/me")
+        ? normalizedUrl
         : normalizedUrl + "/api/vkcoin/external/me";
       const upstream = await fetch(apiUrl, {
         method: "GET",
