@@ -49,6 +49,9 @@ http.createServer(async (req, res) => {
       const username = String(input.username || "").trim().replace(/^@/, "").toLowerCase();
       const name = String(input.name || "Игрок").slice(0, 40);
       const referredBy = String(input.referredBy || "");
+      const telegramId = String(input.telegramId || "").slice(0, 32);
+      const photoUrl = String(input.photoUrl || "").slice(0, 2048);
+      const safePhotoUrl = /^https:\/\//i.test(photoUrl) ? photoUrl : "";
       const balance = Number(input.balance);
       if (!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId) || !Number.isFinite(balance) || balance < 0 || balance > 1e15) {
         res.writeHead(400); return res.end(JSON.stringify({ error: "Invalid player data" }));
@@ -57,12 +60,15 @@ http.createServer(async (req, res) => {
       const collision = username && [...registeredPlayers.values()].find(p => p.username === username && p.id !== clientId);
       if (collision) { res.writeHead(409); return res.end(JSON.stringify({ error: "Этот username уже занят." })); }
       const previous = registeredPlayers.get(clientId);
-      if (!previous && referredBy && referredBy !== clientId && registeredPlayers.has(referredBy) && !referredPlayerIds.has(clientId)) { referredPlayerIds.add(clientId); const inviter=registeredPlayers.get(referredBy); if(inviter) inviter.referrals=(inviter.referrals||0)+1; }
+      const inviterId = referredBy ? ([...registeredPlayers.values()].find(p => p.id === referredBy || (p.telegramId && p.telegramId === referredBy)) || {}).id : "";
+      if (!previous && inviterId && inviterId !== clientId && !referredPlayerIds.has(clientId)) { referredPlayerIds.add(clientId); const inviter=registeredPlayers.get(inviterId); if(inviter) inviter.referrals=(inviter.referrals||0)+1; }
       registeredPlayers.set(clientId, {
         id: clientId,
         name: username ? "@" + username : (previous ? previous.name : name),
         username: username || (previous ? previous.username : ""),
-        referredBy: previous ? previous.referredBy : (referredBy && registeredPlayers.has(referredBy) && referredBy !== clientId ? referredBy : ""),
+        referredBy: previous ? previous.referredBy : (inviterId && inviterId !== clientId ? inviterId : ""),
+        telegramId: telegramId || (previous ? previous.telegramId || "" : ""),
+        photoUrl: safePhotoUrl || (previous ? previous.photoUrl || "" : ""),
         referrals: previous ? (previous.referrals || 0) : 0,
         balance: Math.round(balance * 1000) / 1000,
         totalWon: previous ? Math.max(previous.totalWon || 0, Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000)) : Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000),
@@ -84,7 +90,7 @@ http.createServer(async (req, res) => {
     }
     const players = [...registeredPlayers.values()].filter(p => p.id !== clientId)
       .sort((a,b) => a.name.localeCompare(b.name))
-      .map(p => ({ id:p.id, name:p.name, username:p.username || "", balance:p.balance }));
+      .map(p => ({ id:p.id, name:p.name, username:p.username || "", photoUrl:p.photoUrl || "", telegramId:p.telegramId || "", balance:p.balance }));
     res.writeHead(200); return res.end(JSON.stringify({ players }));
   }
 
@@ -134,7 +140,7 @@ http.createServer(async (req, res) => {
     const players = allPlayers
       .sort((a, b) => rankMode === "referrals" ? (b.referrals || 0) - (a.referrals || 0) : (b.totalWon || 0) - (a.totalWon || 0) || a.registeredAt.localeCompare(b.registeredAt))
       .slice(0, 100)
-      .map((p) => ({ name: p.name, username: p.username || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, registeredAt: p.registeredAt }));
+      .map((p) => ({ name: p.name, username: p.username || "", photoUrl: p.photoUrl || "", telegramId: p.telegramId || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, registeredAt: p.registeredAt }));
     res.writeHead(200);
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
   }
