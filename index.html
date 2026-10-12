@@ -5,15 +5,15 @@
 </style></head><body><div class="float f1">$</div><div class="float f2">VK</div><div class="float f3">VC</div>
 <main><header class="top"><div><div class="brand">◈ VK COIN</div><div class="sub">DIGITAL COIN EXCHANGE</div></div><div class="online">● Онлайн</div></header>
 <section class="hero glass"><div class="eyebrow">БЫСТРЫЙ ОБМЕН</div><h1>Твои монеты.<br><span>Твои правила.</span></h1><p>Удобный расчёт стоимости VK COIN в стеклянном интерфейсе.</p></section>
-<section class="rates"><div class="rate glass sell"><div class="muted">↗ Продажа</div><div class="price">10.76 ₽</div><div class="muted">за 11 600.000 VK COIN</div></div><div class="rate glass buy"><div class="muted">↙ Скупка</div><div class="price">4.65 ₽</div><div class="muted">за 500 VK COIN</div></div></section>
+<section class="rates"><div class="rate glass sell"><div class="muted">↗ Продажа</div><div class="price">10.76 ₽</div><div class="muted">за 11 600.000 VK COIN</div></div><div class="rate glass buy"><div class="muted">↙ Скупка</div><div class="price">225.60 ₽</div><div class="muted">за 500 VK COIN</div></div></section>
 <div class="section"><h2>Обмен монет</h2><span>Выбери действие</span></div><section class="actions"><button class="action sell" onclick="openSheet('sell')"><span class="symbol">↗</span><b>Продать</b><small>Обменять монеты на ₽</small></button><button class="action buy" onclick="openSheet('buy')"><span class="symbol">↙</span><b>Купить</b><small>Получить монеты</small></button></section>
 <div class="section"><h2>Мои заявки</h2><span id="count">0 заявок</span></div><div id="history" class="history glass">Здесь появятся созданные заявки.</div>
-<footer class="footer"><b>● КУРСЫ</b>Продажа : 10.76₽ за 11600.000<br>Скупка : 4.65₽ за 500<br><span style="opacity:.6">VK COIN EXCHANGE</span></footer></main>
+<footer class="footer"><b>● КУРСЫ</b>Продажа : 10.76₽ за 11600.000<br>Скупка : 225.60₽ за 500<br><span style="opacity:.6">VK COIN EXCHANGE</span></footer></main>
 <div class="overlay" id="overlay"><section class="sheet"><div class="sheethead"><div><h2 id="title">Продать монеты</h2><p id="subtitle">Укажи количество VK COIN</p></div><button class="close" onclick="closeSheet()">×</button></div><div id="body"></div></section></div>
 <script>
 let mode='sell',amount=0,currentBank='',currentDetails='';
 const SUPABASE_URL='https://YOUR_PROJECT_REF.supabase.co';
-const SUPABASE_ANON_KEY='YOUR_SUPABASE_ANON_KEY';const $=id=>document.getElementById(id),sellRate=10.76/11600,buyRate=4.65/500;
+const SUPABASE_ANON_KEY='YOUR_SUPABASE_ANON_KEY';const $=id=>document.getElementById(id),sellRate=10.76/11600,buyRate=225.60/500;
 const money=n=>Number(n||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₽';
 const coins=n=>Number(n||0).toLocaleString('ru-RU',{minimumFractionDigits:3,maximumFractionDigits:3});
 function openSheet(m){mode=m;$('overlay').classList.add('open');form()}
