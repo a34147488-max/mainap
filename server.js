@@ -5,6 +5,7 @@ const path = require("node:path");
 const root = __dirname;
 const port = Number(process.env.PORT) || 3000;
 const onlineClients = new Map();
+const registeredPlayers = new Map();
 const ONLINE_TTL_MS = 60_000;
 
 const mime = {
@@ -20,6 +21,55 @@ const mime = {
 
 http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, "http://localhost");
+
+  if (requestUrl.pathname === "/api/players/register") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "POST") {
+      res.writeHead(405, { Allow: "POST" });
+      return res.end(JSON.stringify({ error: "Method not allowed" }));
+    }
+    let body = "";
+    req.on("data", chunk => { body += chunk; if (body.length > 4096) req.destroy(); });
+    req.on("end", () => {
+      let input;
+      try { input = JSON.parse(body || "{}"); } catch {
+        res.writeHead(400); return res.end(JSON.stringify({ error: "Invalid JSON" }));
+      }
+      const clientId = String(input.clientId || "");
+      const name = String(input.name || "Игрок").slice(0, 40);
+      const balance = Number(input.balance);
+      if (!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId) || !Number.isFinite(balance) || balance < 0 || balance > 1e15) {
+        res.writeHead(400); return res.end(JSON.stringify({ error: "Invalid player data" }));
+      }
+      const previous = registeredPlayers.get(clientId);
+      registeredPlayers.set(clientId, {
+        id: clientId,
+        name: previous ? previous.name : name,
+        balance: Math.round(balance * 1000) / 1000,
+        registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
+        lastSeen: Date.now()
+      });
+      res.writeHead(200);
+      return res.end(JSON.stringify({ registered: true }));
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/players/leaderboard") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "GET") {
+      res.writeHead(405, { Allow: "GET" });
+      return res.end(JSON.stringify({ error: "Method not allowed" }));
+    }
+    const players = [...registeredPlayers.values()]
+      .sort((a, b) => b.balance - a.balance || a.registeredAt.localeCompare(b.registeredAt))
+      .slice(0, 100)
+      .map((p) => ({ name: p.name, balance: p.balance, registeredAt: p.registeredAt }));
+    res.writeHead(200);
+    return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
+  }
 
   if (requestUrl.pathname === "/api/online") {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
