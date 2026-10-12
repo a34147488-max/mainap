@@ -133,6 +133,29 @@ http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
   }
 
+  if (requestUrl.pathname === "/api/games/rounds") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", chunk => { body += chunk; if (body.length > 4096) req.destroy(); });
+      req.on("end", () => {
+        let input; try { input = JSON.parse(body || "{}"); } catch { res.writeHead(400); return res.end(JSON.stringify({error:"Invalid JSON"})); }
+        const clientId=String(input.clientId||""), type=String(input.type||""), bet=Number(input.bet), net=Number(input.net);
+        if(!registeredPlayers.has(clientId)||!["olympus","bandit","wheel","flip","dice"].includes(type)||!Number.isFinite(bet)||bet<0||!Number.isFinite(net)){res.writeHead(400);return res.end(JSON.stringify({error:"Invalid round"}));}
+        const p=registeredPlayers.get(clientId);
+        playerGameRounds.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),clientId,type,username:p.username||p.name,bet:Math.round(bet*1000)/1000,net:Math.round(net*1000)/1000,label:String(input.label||"Раунд").slice(0,100),createdAt:new Date().toISOString()});
+        if(playerGameRounds.length>500)playerGameRounds.length=500;
+        res.writeHead(200);return res.end(JSON.stringify({saved:true}));
+      });
+      return;
+    }
+    if(req.method!=="GET"){res.writeHead(405,{Allow:"GET, POST"});return res.end(JSON.stringify({error:"Method not allowed"}));}
+    const type=String(requestUrl.searchParams.get("type")||"");
+    const rounds=playerGameRounds.filter(x=>!type||x.type===type).slice(0,30);
+    res.writeHead(200);return res.end(JSON.stringify({rounds}));
+  }
+
   if (requestUrl.pathname === "/api/online") {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
