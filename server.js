@@ -301,7 +301,10 @@ http.createServer(async (req, res) => {
     }
     res.writeHead(200, {
       "Content-Type": mime[path.extname(filePath).toLowerCase()] || "application/octet-stream",
-      "X-Content-Type-Options": "nosniff"
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": filePath.endsWith("index.html") ? "no-store, no-cache, must-revalidate, proxy-revalidate" : "no-cache, must-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0"
     });
     fs.createReadStream(filePath).pipe(res);
   });
