@@ -31,6 +31,37 @@ const mime = {
 http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, "http://localhost");
 
+  // Serve Telegram profile photos through the server so the bot token never reaches the browser.
+  if (requestUrl.pathname.startsWith("/api/telegram/avatar/")) {
+    res.setHeader("Cache-Control", "public, max-age=21600");
+    const telegramId = requestUrl.pathname.slice("/api/telegram/avatar/".length);
+    if (!/^\\d{1,20}$/.test(telegramId)) { res.writeHead(400); return res.end("Invalid Telegram user ID"); }
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) { res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); return res.end("Telegram avatar service is not configured"); }
+    try {
+      const photosResponse = await fetch("https://api.telegram.org/bot" + botToken + "/getUserProfilePhotos?user_id=" + encodeURIComponent(telegramId) + "&limit=1", { signal: AbortSignal.timeout(10000) });
+      if (!photosResponse.ok) throw new Error("Telegram photo lookup failed");
+      const photosData = await photosResponse.json();
+      const sizes = photosData && photosData.ok && photosData.result && photosData.result.photos && photosData.result.photos[0];
+      if (!sizes || !sizes.length) { res.writeHead(404, { "Cache-Control": "no-store" }); return res.end("No Telegram profile photo"); }
+      const photo = sizes[sizes.length - 1];
+      const fileResponse = await fetch("https://api.telegram.org/bot" + botToken + "/getFile?file_id=" + encodeURIComponent(photo.file_id), { signal: AbortSignal.timeout(10000) });
+      if (!fileResponse.ok) throw new Error("Telegram file lookup failed");
+      const fileData = await fileResponse.json();
+      const filePath = fileData && fileData.ok && fileData.result && fileData.result.file_path;
+      if (!filePath) throw new Error("Telegram photo file not found");
+      const imageResponse = await fetch("https://api.telegram.org/file/bot" + botToken + "/" + filePath, { signal: AbortSignal.timeout(15000) });
+      if (!imageResponse.ok) throw new Error("Telegram photo download failed");
+      const bytes = Buffer.from(await imageResponse.arrayBuffer());
+      if (bytes.length > 5 * 1024 * 1024) { res.writeHead(413); return res.end("Avatar too large"); }
+      res.writeHead(200, { "Content-Type": imageResponse.headers.get("content-type") || "image/jpeg", "X-Content-Type-Options": "nosniff" });
+      return res.end(bytes);
+    } catch (error) {
+      res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+      return res.end("Could not load Telegram avatar");
+    }
+  }
+
   if (requestUrl.pathname === "/api/players/register") {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
