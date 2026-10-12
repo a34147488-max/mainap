@@ -26,7 +26,13 @@ function persistPlayerData() {
 const START1_FILE = path.join(root, '.start1-activations.json');
 let savedStart1Users=[];try{savedStart1Users=JSON.parse(fs.readFileSync(START1_FILE,'utf8'))}catch{}
 const start1Users = new Set(Array.isArray(savedStart1Users)?savedStart1Users:[]);
-const OBnova_FILE = path.join(root, '.obnova-activations.json');
+const PREMIUM_FILE = path.join(root, '.premium-promos.json');
+const PREMIUM_CODES = ['VKC-PREM-7D-A7K2','VKC-PREM-7D-M4Q9','VKC-PREM-7D-R8T3','VKC-PREM-7D-C6W1','VKC-PREM-7D-P2N5','VKC-PREM-7D-H9D4','VKC-PREM-7D-X3B7','VKC-PREM-7D-F5L8','VKC-PREM-7D-J1S6','VKC-PREM-7D-Z7G2'];
+let premiumPromos = {};
+try { premiumPromos = JSON.parse(fs.readFileSync(PREMIUM_FILE, 'utf8')); } catch {}
+for (const code of PREMIUM_CODES) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
+function savePremiumPromos(){ fs.writeFileSync(PREMIUM_FILE, JSON.stringify(premiumPromos, null, 2)); }
+\nconst OBnova_FILE = path.join(root, '.obnova-activations.json');
 let savedObnovaUsers=[];try{savedObnovaUsers=JSON.parse(fs.readFileSync(OBnova_FILE,'utf8'))}catch{}
 const obnovaUsers = new Set(Array.isArray(savedObnovaUsers)?savedObnovaUsers:[]);
 
@@ -327,6 +333,31 @@ http.createServer(async (req, res) => {
     res.writeHead(200);return res.end(JSON.stringify({rounds}));
   }
 
+  if (requestUrl.pathname === "/api/premium/status") {
+    res.setHeader("Content-Type","application/json; charset=utf-8"); res.setHeader("Cache-Control","no-store");
+    const clientId=String(requestUrl.searchParams.get("clientId")||"");
+    const p=registeredPlayers.get(clientId);
+    if(!p){res.writeHead(404);return res.end(JSON.stringify({error:"Игрок не зарегистрирован"}))}
+    const now=Date.now(), until=Number(p.premiumUntil||0), active=until>now;
+    return res.end(JSON.stringify({active,until:active?until:0,daysLeft:active?Math.ceil((until-now)/86400000):0,autoClickEarned:Number(p.autoClickEarned||0),autoClickCap:75000,clickMultiplier:active?5:1}));
+  }
+  if (requestUrl.pathname === "/api/premium/claim") {
+    res.setHeader("Content-Type","application/json; charset=utf-8"); res.setHeader("Cache-Control","no-store");
+    if(req.method!=="POST"){res.writeHead(405,{Allow:"POST"});return res.end(JSON.stringify({error:"Method not allowed"}))}
+    let body="";req.on("data",c=>{body+=c;if(body.length>4096)req.destroy()});req.on("end",()=>{
+      let input;try{input=JSON.parse(body||"{}")}catch{res.writeHead(400);return res.end(JSON.stringify({error:"Некорректный запрос"}))}
+      const clientId=String(input.clientId||""),code=String(input.code||"").trim().toUpperCase();
+      if(!registeredPlayers.has(clientId)){res.writeHead(400);return res.end(JSON.stringify({error:"Сначала зарегистрируй игрока"}))}
+      if(!Object.prototype.hasOwnProperty.call(premiumPromos,code)){res.writeHead(400);return res.end(JSON.stringify({error:"Промокод PREMIUM не найден"}))}
+      if(premiumPromos[code].usedBy){res.writeHead(409);return res.end(JSON.stringify({error:"Этот промокод уже активирован"}))}
+      const p=registeredPlayers.get(clientId),now=Date.now();
+      if(Number(p.premiumUntil||0)>now){res.writeHead(409);return res.end(JSON.stringify({error:"У тебя уже активен PREMIUM"}))}
+      premiumPromos[code]={usedBy:clientId,usedAt:now};
+      p.premiumUntil=now+7*86400000;p.autoClickEarned=Number(p.autoClickEarned||0);p.premiumStartedAt=now;
+      try{savePremiumPromos();persistPlayerData()}catch(e){premiumPromos[code]={usedBy:null,usedAt:null};res.writeHead(500);return res.end(JSON.stringify({error:"Не удалось сохранить PREMIUM"}))}
+      res.writeHead(200);return res.end(JSON.stringify({success:true,until:p.premiumUntil,daysLeft:7,autoClickCap:75000,clickMultiplier:5}));
+    });return;
+  }
   if (requestUrl.pathname === "/api/promos/redeem") {
     res.setHeader("Content-Type","application/json; charset=utf-8");res.setHeader("Cache-Control","no-store");
     if(req.method!=="POST"){res.writeHead(405,{Allow:"POST"});return res.end(JSON.stringify({error:"Method not allowed"}))}
