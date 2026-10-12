@@ -9,6 +9,16 @@ const registeredPlayers = new Map();
 const playerTransfers = [];
 const playerGameRounds = [];
 const referredPlayerIds = new Set();
+const PLAYER_DATA_FILE = path.join(root, '.vkcoin-player-data.json');
+try {
+  const saved = JSON.parse(fs.readFileSync(PLAYER_DATA_FILE, 'utf8'));
+  for (const p of (saved.players || [])) if (p && p.id) registeredPlayers.set(p.id, p);
+  for (const t of (saved.transfers || [])) playerTransfers.push(t);
+  for (const id of (saved.referredPlayerIds || [])) referredPlayerIds.add(id);
+} catch {}
+function persistPlayerData() {
+  try { fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify({players:[...registeredPlayers.values()], transfers:playerTransfers.slice(0,1000), referredPlayerIds:[...referredPlayerIds]})); } catch (e) { console.error('Could not persist player data:', e.message); }
+}
 const START1_FILE = path.join(root, '.start1-activations.json');
 let savedStart1Users=[];try{savedStart1Users=JSON.parse(fs.readFileSync(START1_FILE,'utf8'))}catch{}
 const start1Users = new Set(Array.isArray(savedStart1Users)?savedStart1Users:[]);
@@ -92,7 +102,12 @@ http.createServer(async (req, res) => {
       if (collision) { res.writeHead(409); return res.end(JSON.stringify({ error: "Этот username уже занят." })); }
       const previous = registeredPlayers.get(clientId);
       const inviterId = referredBy ? ([...registeredPlayers.values()].find(p => p.id === referredBy || (p.telegramId && p.telegramId === referredBy)) || {}).id : "";
-      if (!previous && inviterId && inviterId !== clientId && !referredPlayerIds.has(clientId)) { referredPlayerIds.add(clientId); const inviter=registeredPlayers.get(inviterId); if(inviter) inviter.referrals=(inviter.referrals||0)+1; }
+      const resolvedInviterId = previous ? (previous.referredBy || "") : (inviterId && inviterId !== clientId ? inviterId : "");
+      if (!previous && resolvedInviterId && !referredPlayerIds.has(clientId)) {
+        referredPlayerIds.add(clientId);
+        const inviter = registeredPlayers.get(resolvedInviterId);
+        if (inviter) inviter.referrals = (inviter.referrals || 0) + 1;
+      }
       registeredPlayers.set(clientId, {
         id: clientId,
         name: username ? "@" + username : (previous ? previous.name : name),
@@ -106,8 +121,9 @@ http.createServer(async (req, res) => {
         registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
         lastSeen: Date.now()
       });
+      persistPlayerData();
       res.writeHead(200);
-      return res.end(JSON.stringify({ registered: true }));
+      return res.end(JSON.stringify({ registered: true, referrals: registeredPlayers.get(clientId).referrals || 0 }));
     });
     return;
   }
@@ -145,6 +161,7 @@ http.createServer(async (req, res) => {
       recipient.balance=Math.round((recipient.balance+amount)*1000)/1000;
       const entry={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),senderId,recipientId,amount,createdAt:new Date().toISOString(),senderName:sender.name,recipientName:recipient.name};
       playerTransfers.unshift(entry); if(playerTransfers.length>1000)playerTransfers.length=1000;
+      persistPlayerData();
       res.writeHead(200); return res.end(JSON.stringify({success:true,amount,recipient:{name:recipient.name,balance:recipient.balance},sender:{balance:sender.balance}}));
     });
     return;
