@@ -35,7 +35,7 @@ http.createServer(async (req, res) => {
   if (requestUrl.pathname.startsWith("/api/telegram/avatar/")) {
     res.setHeader("Cache-Control", "public, max-age=21600");
     const telegramId = requestUrl.pathname.slice("/api/telegram/avatar/".length);
-    if (!/^\\d{1,20}$/.test(telegramId)) { res.writeHead(400); return res.end("Invalid Telegram user ID"); }
+    if (!/^\d{1,20}$/.test(telegramId)) { res.writeHead(400); return res.end("Invalid Telegram user ID"); }
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) { res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); return res.end("Telegram avatar service is not configured"); }
     try {
