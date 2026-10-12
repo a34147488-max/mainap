@@ -9,6 +9,12 @@ const registeredPlayers = new Map();
 const playerTransfers = [];
 const playerGameRounds = [];
 const referredPlayerIds = new Set();
+const START1_FILE = path.join(root, '.start1-activations.json');
+let savedStart1Users=[];try{savedStart1Users=JSON.parse(fs.readFileSync(START1_FILE,'utf8'))}catch{}
+const start1Users = new Set(Array.isArray(savedStart1Users)?savedStart1Users:[]);
+let rouletteRoundSequence=1;
+let currentRouletteRound={id:rouletteRoundSequence,startedAt:Date.now(),endsAt:Date.now()+25000,status:'open',result:null,bets:[]};
+setInterval(()=>{const now=Date.now();if(currentRouletteRound.status==='open'&&now>=currentRouletteRound.endsAt){currentRouletteRound.status='resolved';currentRouletteRound.result=Math.floor(Math.random()*37);currentRouletteRound.resolvedAt=now}else if(currentRouletteRound.status==='resolved'&&now-currentRouletteRound.resolvedAt>=5000){rouletteRoundSequence++;currentRouletteRound={id:rouletteRoundSequence,startedAt:now,endsAt:now+25000,status:'open',result:null,bets:[]}}},250);
 const ONLINE_TTL_MS = 60_000;
 
 const mime = {
@@ -154,6 +160,38 @@ http.createServer(async (req, res) => {
     const type=String(requestUrl.searchParams.get("type")||"");
     const rounds=playerGameRounds.filter(x=>!type||x.type===type).slice(0,30);
     res.writeHead(200);return res.end(JSON.stringify({rounds}));
+  }
+
+  if (requestUrl.pathname === "/api/promos/redeem") {
+    res.setHeader("Content-Type","application/json; charset=utf-8");res.setHeader("Cache-Control","no-store");
+    if(req.method!=="POST"){res.writeHead(405,{Allow:"POST"});return res.end(JSON.stringify({error:"Method not allowed"}))}
+    let body="";req.on("data",c=>{body+=c;if(body.length>4096)req.destroy()});req.on("end",()=>{let input;try{input=JSON.parse(body||"{}")}catch{res.writeHead(400);return res.end(JSON.stringify({error:"Invalid JSON"}))}
+      const clientId=String(input.clientId||""),code=String(input.code||"").toUpperCase();
+      if(!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId)||code!=="START1"){res.writeHead(400);return res.end(JSON.stringify({error:"Промокод недействителен"}))}
+      if(!registeredPlayers.has(clientId)){res.writeHead(400);return res.end(JSON.stringify({error:"Сначала зарегистрируй игрока"}))}
+      if(start1Users.has(clientId)){res.writeHead(409);return res.end(JSON.stringify({error:"START1 можно активировать только один раз на игрока"}))}
+      if(start1Users.size>=50){res.writeHead(409);return res.end(JSON.stringify({error:"Лимит в 50 активаций START1 уже исчерпан"}))}
+      start1Users.add(clientId);try{fs.writeFileSync(START1_FILE,JSON.stringify([...start1Users]))}catch{}
+      res.writeHead(200);return res.end(JSON.stringify({success:true,amount:1000,remaining:50-start1Users.size}));
+    });return;
+  }
+  if (requestUrl.pathname === "/api/roulette/round") {
+    res.setHeader("Content-Type","application/json; charset=utf-8");res.setHeader("Cache-Control","no-store");
+    if(req.method!=="GET"){res.writeHead(405,{Allow:"GET"});return res.end(JSON.stringify({error:"Method not allowed"}))}
+    const r=currentRouletteRound;return res.end(JSON.stringify({round:{id:r.id,startedAt:r.startedAt,endsAt:r.endsAt,status:r.status,result:r.result,bets:r.bets.map(x=>({clientId:x.clientId,username:x.username,amount:x.amount,choices:x.choices})),playerCount:new Set(r.bets.map(x=>x.clientId)).size}}));
+  }
+  if (requestUrl.pathname === "/api/roulette/bet") {
+    res.setHeader("Content-Type","application/json; charset=utf-8");res.setHeader("Cache-Control","no-store");
+    if(req.method!=="POST"){res.writeHead(405,{Allow:"POST"});return res.end(JSON.stringify({error:"Method not allowed"}))}
+    let body="";req.on("data",c=>{body+=c;if(body.length>8192)req.destroy()});req.on("end",()=>{let input;try{input=JSON.parse(body||"{}")}catch{res.writeHead(400);return res.end(JSON.stringify({error:"Invalid JSON"}))}
+      const clientId=String(input.clientId||""),amount=Number(input.amount),choices=Array.isArray(input.choices)?input.choices:[];
+      if(!registeredPlayers.has(clientId)||!Number.isFinite(amount)||amount<1||!choices.length||choices.length>37){res.writeHead(400);return res.end(JSON.stringify({error:"Проверь сумму и исходы ставки"}))}
+      if(currentRouletteRound.status!=="open"||Date.now()>=currentRouletteRound.endsAt){res.writeHead(409);return res.end(JSON.stringify({error:"Ставки закрыты — дождись следующего раунда"}))}
+      const allowed=new Set(["red","black","even","odd","range13","low","dozen1","range25","high","number","zero"]),clean=[];
+      for(const c of choices){const kind=String(c.kind||""),number=Number(c.number);if(!allowed.has(kind)||(kind==="number"&&(!Number.isInteger(number)||number<0||number>36))){res.writeHead(400);return res.end(JSON.stringify({error:"Некорректный исход"}))}clean.push({kind,label:String(c.label||kind).slice(0,40),...(kind==="number"?{number}:{}),mult:kind==="number"?30:kind==="zero"?36:2})}
+      const p=registeredPlayers.get(clientId);currentRouletteRound.bets.push({clientId,username:p.username?"@"+p.username:p.name,amount:Math.round(amount*1000)/1000,choices:clean,createdAt:new Date().toISOString()});
+      res.writeHead(200);return res.end(JSON.stringify({accepted:true,round:{id:currentRouletteRound.id,endsAt:currentRouletteRound.endsAt}}));
+    });return;
   }
 
   if (requestUrl.pathname === "/api/online") {
