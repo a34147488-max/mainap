@@ -8,6 +8,8 @@ const onlineClients = new Map();
 const registeredPlayers = new Map();
 const playerTransfers = [];
 const playerGameRounds = [];
+const marketListings = [];
+const marketHistory = [];
 const referredPlayerIds = new Set();
 const PLAYER_DATA_FILE = path.join(root, '.vkcoin-player-data.json');
 try {
@@ -15,9 +17,11 @@ try {
   for (const p of (saved.players || [])) if (p && p.id) registeredPlayers.set(p.id, p);
   for (const t of (saved.transfers || [])) playerTransfers.push(t);
   for (const id of (saved.referredPlayerIds || [])) referredPlayerIds.add(id);
+  for (const item of (saved.marketListings || [])) marketListings.push(item);
+  for (const item of (saved.marketHistory || [])) marketHistory.push(item);
 } catch {}
 function persistPlayerData() {
-  try { fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify({players:[...registeredPlayers.values()], transfers:playerTransfers.slice(0,1000), referredPlayerIds:[...referredPlayerIds]})); } catch (e) { console.error('Could not persist player data:', e.message); }
+  try { fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify({players:[...registeredPlayers.values()], transfers:playerTransfers.slice(0,1000), referredPlayerIds:[...referredPlayerIds], marketListings, marketHistory:marketHistory.slice(-300)})); } catch (e) { console.error('Could not persist player data:', e.message); }
 }
 const START1_FILE = path.join(root, '.start1-activations.json');
 let savedStart1Users=[];try{savedStart1Users=JSON.parse(fs.readFileSync(START1_FILE,'utf8'))}catch{}
@@ -184,6 +188,47 @@ http.createServer(async (req, res) => {
     if(!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId)){res.writeHead(400);return res.end(JSON.stringify({error:"Invalid player ID"}));}
     const history=playerTransfers.filter(t=>t.senderId===clientId||t.recipientId===clientId).slice(0,50).map(t=>({direction:t.recipientId===clientId?"in":"out",counterparty:t.recipientId===clientId?t.senderName:t.recipientName,amount:t.amount,createdAt:t.createdAt}));
     res.writeHead(200); return res.end(JSON.stringify({history}));
+  }
+
+  if (requestUrl.pathname === "/api/market") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method === "GET") {
+      const listings = marketListings.slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+      return res.end(JSON.stringify({listings, history:marketHistory.slice(-60)}));
+    }
+    if (req.method !== "POST") { res.writeHead(405, {Allow:"GET, POST"}); return res.end(JSON.stringify({error:"Method not allowed"})); }
+    let body = "";
+    req.on("data", chunk => { body += chunk; if(body.length > 4096) req.destroy(); });
+    req.on("end", () => {
+      let input; try { input=JSON.parse(body||"{}"); } catch { res.writeHead(400); return res.end(JSON.stringify({error:"Invalid JSON"})); }
+      const action=String(input.action||""), clientId=String(input.clientId||""), listingId=String(input.listingId||"");
+      const player=registeredPlayers.get(clientId);
+      if (!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId) || !player) { res.writeHead(401); return res.end(JSON.stringify({error:"Сначала открой приложение и зарегистрируйся."})); }
+      if (action==="create") {
+        const amount=Number(input.amount), rate=Number(input.rate);
+        if (!Number.isSafeInteger(amount)||amount<50000||amount>1e12||!Number.isFinite(rate)||rate<=0||rate>1e9) { res.writeHead(400); return res.end(JSON.stringify({error:"Минимум 50 000 монет. Укажи корректный курс за 1 000 монет."})); }
+        if (player.balance<amount) { res.writeHead(400); return res.end(JSON.stringify({error:"На серверном балансе недостаточно монет для объявления."})); }
+        player.balance=Math.round((player.balance-amount)*1000)/1000;
+        const item={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),sellerId:clientId,sellerName:player.name||"Продавец",username:player.username||"",amount,rate:Math.round(rate*100)/100,createdAt:new Date().toISOString()};
+        marketListings.push(item); marketHistory.push({at:item.createdAt,rate:item.rate,kind:"listing"}); persistPlayerData();
+        res.writeHead(200); return res.end(JSON.stringify({success:true,listing:item,balance:player.balance}));
+      }
+      const idx=marketListings.findIndex(x=>x.id===listingId && x.sellerId===clientId);
+      if (idx<0) { res.writeHead(404); return res.end(JSON.stringify({error:"Объявление не найдено или оно уже закрыто."})); }
+      if (action==="cancel") {
+        const [item]=marketListings.splice(idx,1); player.balance=Math.round((player.balance+item.amount)*1000)/1000;
+        marketHistory.push({at:new Date().toISOString(),rate:item.rate,kind:"cancel"}); persistPlayerData();
+        res.writeHead(200); return res.end(JSON.stringify({success:true,balance:player.balance}));
+      }
+      if (action==="complete") {
+        const [item]=marketListings.splice(idx,1);
+        marketHistory.push({at:new Date().toISOString(),rate:item.rate,kind:"sale"}); persistPlayerData();
+        res.writeHead(200); return res.end(JSON.stringify({success:true,listing:item}));
+      }
+      res.writeHead(400); return res.end(JSON.stringify({error:"Неизвестное действие."}));
+    });
+    return;
   }
 
   if (requestUrl.pathname === "/api/players/leaderboard") {
