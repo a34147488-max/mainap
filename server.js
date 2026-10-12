@@ -47,7 +47,8 @@ http.createServer(async (req, res) => {
       registeredPlayers.set(clientId, {
         id: clientId,
         name: previous ? previous.name : name,
-        balance: previous ? previous.balance : Math.round(balance * 1000) / 1000,
+        balance: previous ? previous.balance : 0,
+        totalWon: previous ? Math.max(previous.totalWon || 0, Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000)) : Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000),
         registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
         lastSeen: Date.now()
       });
@@ -112,9 +113,9 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ error: "Method not allowed" }));
     }
     const players = [...registeredPlayers.values()]
-      .sort((a, b) => b.balance - a.balance || a.registeredAt.localeCompare(b.registeredAt))
+      .sort((a, b) => (b.totalWon || 0) - (a.totalWon || 0) || a.registeredAt.localeCompare(b.registeredAt))
       .slice(0, 100)
-      .map((p) => ({ name: p.name, balance: p.balance, registeredAt: p.registeredAt }));
+      .map((p) => ({ name: p.name, totalWon: p.totalWon || 0, registeredAt: p.registeredAt }));
     res.writeHead(200);
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
   }
