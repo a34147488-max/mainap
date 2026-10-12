@@ -15,7 +15,60 @@ const mime = {
   ".ico": "image/x-icon"
 };
 
-http.createServer((req, res) => {
+http.createServer(async (req, res) => {
+  const requestUrl = new URL(req.url, "http://localhost");
+
+  // Secure server-side proxy for checking the VK COIN account.
+  // The API key is read only from Railway environment variables and is never sent to the browser.
+  if (requestUrl.pathname === "/api/vkcoin/me") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "GET") {
+      res.writeHead(405, { Allow: "GET" });
+      return res.end(JSON.stringify({ error: "Method not allowed" }));
+    }
+
+    const apiKey = process.env.VKCOIN_API_KEY;
+    const configuredUrl = process.env.VKCOIN_API_URL;
+    if (!apiKey || !configuredUrl) {
+      res.writeHead(503);
+      return res.end(JSON.stringify({
+        error: "VK COIN API is not configured",
+        requiredVariables: ["VKCOIN_API_URL", "VKCOIN_API_KEY"]
+      }));
+    }
+
+    try {
+      const apiUrl = configuredUrl.replace(/\\/$/, "").endsWith("/api/vkcoin/external/me")
+        ? configuredUrl
+        : configuredUrl.replace(/\\/$/, "") + "/api/vkcoin/external/me";
+      const upstream = await fetch(apiUrl, {
+        method: "GET",
+        headers: { Authorization: "Bearer " + apiKey, Accept: "application/json" },
+        signal: AbortSignal.timeout(10000)
+      });
+      const body = await upstream.text();
+      let data;
+      try { data = JSON.parse(body); } catch { data = { message: "VK COIN API returned a non-JSON response" }; }
+      if (!upstream.ok) {
+        res.writeHead(upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502);
+        return res.end(JSON.stringify({
+          error: "VK COIN API request failed",
+          upstreamStatus: upstream.status,
+          details: data
+        }));
+      }
+      res.writeHead(200);
+      return res.end(JSON.stringify({ connected: true, account: data }));
+    } catch (error) {
+      res.writeHead(502);
+      return res.end(JSON.stringify({
+        error: "Could not reach VK COIN API",
+        details: error.name === "TimeoutError" ? "Request timed out" : "Network request failed"
+      }));
+    }
+  }
+
   let pathname;
   try {
     pathname = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
