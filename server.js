@@ -26,6 +26,10 @@ function persistPlayerData() {
 const START1_FILE = path.join(root, '.start1-activations.json');
 let savedStart1Users=[];try{savedStart1Users=JSON.parse(fs.readFileSync(START1_FILE,'utf8'))}catch{}
 const start1Users = new Set(Array.isArray(savedStart1Users)?savedStart1Users:[]);
+const OBnova_FILE = path.join(root, '.obnova-activations.json');
+let savedObnovaUsers=[];try{savedObnovaUsers=JSON.parse(fs.readFileSync(OBnova_FILE,'utf8'))}catch{}
+const obnovaUsers = new Set(Array.isArray(savedObnovaUsers)?savedObnovaUsers:[]);
+
 let rouletteRoundSequence=1;
 let currentRouletteRound={id:rouletteRoundSequence,startedAt:Date.now(),endsAt:Date.now()+25000,status:'open',result:null,bets:[]};
 setInterval(()=>{const now=Date.now();if(currentRouletteRound.status==='open'&&now>=currentRouletteRound.endsAt){currentRouletteRound.status='resolved';currentRouletteRound.result=Math.floor(Math.random()*37);currentRouletteRound.resolvedAt=now}else if(currentRouletteRound.status==='resolved'&&now-currentRouletteRound.resolvedAt>=5000){rouletteRoundSequence++;currentRouletteRound={id:rouletteRoundSequence,startedAt:now,endsAt:now+25000,status:'open',result:null,bets:[]}}},250);
@@ -286,8 +290,14 @@ http.createServer(async (req, res) => {
     if(req.method!=="POST"){res.writeHead(405,{Allow:"POST"});return res.end(JSON.stringify({error:"Method not allowed"}))}
     let body="";req.on("data",c=>{body+=c;if(body.length>4096)req.destroy()});req.on("end",()=>{let input;try{input=JSON.parse(body||"{}")}catch{res.writeHead(400);return res.end(JSON.stringify({error:"Invalid JSON"}))}
       const clientId=String(input.clientId||""),code=String(input.code||"").toUpperCase();
-      if(!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId)||code!=="START1"){res.writeHead(400);return res.end(JSON.stringify({error:"Промокод недействителен"}))}
+      if(!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId)||!["START1","OBNOVA"].includes(code)){res.writeHead(400);return res.end(JSON.stringify({error:"Промокод недействителен"}))}
       if(!registeredPlayers.has(clientId)){res.writeHead(400);return res.end(JSON.stringify({error:"Сначала зарегистрируй игрока"}))}
+      if(code==="OBNOVA"){
+        if(obnovaUsers.has(clientId)){res.writeHead(409);return res.end(JSON.stringify({error:"Промокод obnova можно активировать только один раз на игрока"}))}
+        if(obnovaUsers.size>=50){res.writeHead(409);return res.end(JSON.stringify({error:"Лимит в 50 активаций obnova уже исчерпан"}))}
+        obnovaUsers.add(clientId);try{fs.writeFileSync(OBnova_FILE,JSON.stringify([...obnovaUsers]))}catch(e){obnovaUsers.delete(clientId);res.writeHead(500);return res.end(JSON.stringify({error:"Не удалось сохранить активацию. Попробуй ещё раз."}))}
+        res.writeHead(200);return res.end(JSON.stringify({success:true,amount:3333,remaining:50-obnovaUsers.size}));
+      }
       if(start1Users.has(clientId)){res.writeHead(409);return res.end(JSON.stringify({error:"START1 можно активировать только один раз на игрока"}))}
       if(start1Users.size>=50){res.writeHead(409);return res.end(JSON.stringify({error:"Лимит в 50 активаций START1 уже исчерпан"}))}
       start1Users.add(clientId);try{fs.writeFileSync(START1_FILE,JSON.stringify([...start1Users]))}catch{}
