@@ -6,6 +6,7 @@ const root = __dirname;
 const port = Number(process.env.PORT) || 3000;
 const onlineClients = new Map();
 const registeredPlayers = new Map();
+const playerTransfers = [];
 const ONLINE_TTL_MS = 60_000;
 
 const mime = {
@@ -46,7 +47,7 @@ http.createServer(async (req, res) => {
       registeredPlayers.set(clientId, {
         id: clientId,
         name: previous ? previous.name : name,
-        balance: Math.round(balance * 1000) / 1000,
+        balance: previous ? previous.balance : Math.round(balance * 1000) / 1000,
         registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
         lastSeen: Date.now()
       });
@@ -54,6 +55,53 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ registered: true }));
     });
     return;
+  }
+
+  if (requestUrl.pathname === "/api/players/list") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    const clientId = String(requestUrl.searchParams.get("clientId") || "");
+    if (!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId)) {
+      res.writeHead(400); return res.end(JSON.stringify({ error: "Invalid player ID" }));
+    }
+    const players = [...registeredPlayers.values()].filter(p => p.id !== clientId)
+      .sort((a,b) => a.name.localeCompare(b.name))
+      .map(p => ({ id:p.id, name:p.name, balance:p.balance }));
+    res.writeHead(200); return res.end(JSON.stringify({ players }));
+  }
+
+  if (requestUrl.pathname === "/api/players/transfer") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "POST") { res.writeHead(405, { Allow:"POST" }); return res.end(JSON.stringify({error:"Method not allowed"})); }
+    let body = "";
+    req.on("data", chunk => { body += chunk; if(body.length > 4096) req.destroy(); });
+    req.on("end", () => {
+      let input;
+      try { input = JSON.parse(body || "{}"); } catch { res.writeHead(400); return res.end(JSON.stringify({error:"Invalid JSON"})); }
+      const senderId=String(input.clientId||""), recipientId=String(input.recipientId||""), amount=Number(input.amount);
+      if(!/^[a-zA-Z0-9_-]{12,80}$/.test(senderId)||!/^[a-zA-Z0-9_-]{12,80}$/.test(recipientId)||senderId===recipientId||!Number.isFinite(amount)||amount<=0||Math.round(amount*1000)!==amount*1000) {
+        res.writeHead(400); return res.end(JSON.stringify({error:"Проверь получателя и сумму перевода."}));
+      }
+      const sender=registeredPlayers.get(senderId), recipient=registeredPlayers.get(recipientId);
+      if(!sender||!recipient){res.writeHead(404);return res.end(JSON.stringify({error:"Отправитель или получатель не зарегистрирован."}));}
+      if(sender.balance<amount){res.writeHead(400);return res.end(JSON.stringify({error:"Недостаточно средств на серверном балансе."}));}
+      sender.balance=Math.round((sender.balance-amount)*1000)/1000;
+      recipient.balance=Math.round((recipient.balance+amount)*1000)/1000;
+      const entry={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),senderId,recipientId,amount,createdAt:new Date().toISOString(),senderName:sender.name,recipientName:recipient.name};
+      playerTransfers.unshift(entry); if(playerTransfers.length>1000)playerTransfers.length=1000;
+      res.writeHead(200); return res.end(JSON.stringify({success:true,amount,recipient:{name:recipient.name,balance:recipient.balance},sender:{balance:sender.balance}}));
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/players/transfers") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    const clientId=String(requestUrl.searchParams.get("clientId")||"");
+    if(!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId)){res.writeHead(400);return res.end(JSON.stringify({error:"Invalid player ID"}));}
+    const history=playerTransfers.filter(t=>t.senderId===clientId||t.recipientId===clientId).slice(0,50).map(t=>({direction:t.recipientId===clientId?"in":"out",counterparty:t.recipientId===clientId?t.senderName:t.recipientName,amount:t.amount,createdAt:t.createdAt}));
+    res.writeHead(200); return res.end(JSON.stringify({history}));
   }
 
   if (requestUrl.pathname === "/api/players/leaderboard") {
