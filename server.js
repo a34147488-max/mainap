@@ -271,6 +271,39 @@ http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
   }
 
+  if (requestUrl.pathname === "/api/live-game") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (!globalThis.liveGamePool) globalThis.liveGamePool = { scorpion: 0, subzero: 0, bets: [] };
+    const pool = globalThis.liveGamePool;
+    const odds = () => {
+      const total = pool.scorpion + pool.subzero;
+      const calc = (side) => Math.max(1.5, Math.min(44, total > 0 && side > 0 ? total / side * 0.9 : 44));
+      return { scorpion: +calc(pool.scorpion).toFixed(2), subzero: +calc(pool.subzero).toFixed(2) };
+    };
+    if (req.method === "GET") {
+      res.writeHead(200);
+      return res.end(JSON.stringify({ pool: { scorpion: pool.scorpion, subzero: pool.subzero }, odds: odds(), count: pool.bets.length }));
+    }
+    if (req.method !== "POST") { res.writeHead(405, { Allow: "GET, POST" }); return res.end(JSON.stringify({ error: "Method not allowed" })); }
+    let body = "";
+    req.on("data", chunk => { body += chunk; if (body.length > 2048) req.destroy(); });
+    req.on("end", () => {
+      let input; try { input = JSON.parse(body || "{}"); } catch { res.writeHead(400); return res.end(JSON.stringify({ error: "Invalid JSON" })); }
+      const side = String(input.side || ""), amount = Number(input.amount);
+      if (!["scorpion", "subzero"].includes(side) || !Number.isFinite(amount) || amount <= 0 || amount > 1e12) {
+        res.writeHead(400); return res.end(JSON.stringify({ error: "Invalid live bet" }));
+      }
+      const lockedOdds = odds()[side];
+      pool[side] = Math.round((pool[side] + amount) * 1000) / 1000;
+      pool.bets.unshift({ side, amount, odds: lockedOdds, at: Date.now() });
+      if (pool.bets.length > 5000) pool.bets.length = 5000;
+      res.writeHead(200);
+      return res.end(JSON.stringify({ success: true, lockedOdds, pool: { scorpion: pool.scorpion, subzero: pool.subzero }, odds: odds(), count: pool.bets.length }));
+    });
+    return;
+  }
+
   if (requestUrl.pathname === "/api/games/rounds") {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
