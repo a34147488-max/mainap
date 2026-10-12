@@ -7,6 +7,20 @@ const port = Number(process.env.PORT) || 3000;
 const onlineClients = new Map();
 const ONLINE_TTL_MS = 60_000;
 
+const mime = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon"
+};
+
+http.createServer(async (req, res) => {
+  const requestUrl = new URL(req.url, "http://localhost");
+
   if (requestUrl.pathname === "/api/online") {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
@@ -38,19 +52,6 @@ const ONLINE_TTL_MS = 60_000;
     return res.end(JSON.stringify({ online: onlineClients.size }));
   }
 
-const mime = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon"
-};
-
-http.createServer(async (req, res) => {
-  const requestUrl = new URL(req.url, "http://localhost");
 
   // Secure server-side proxy for checking the VK COIN account.
   // The API key is read only from Railway environment variables and is never sent to the browser.
