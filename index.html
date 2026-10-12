@@ -218,7 +218,7 @@ async function loadMarket(){
   const mine=all.filter(x=>x.sellerId===onlineClientId),others=all.filter(x=>x.sellerId!==onlineClientId);
   window.marketMyListings=mine;
   listingsBox.innerHTML=others.length?others.map(x=>'<button type="button" class="market-listing market-seller-card" style="width:100%;text-align:left;color:inherit;cursor:pointer" onclick="showMarketSeller(&quot;'+String(x.id)+'&quot;)"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b>'+marketEscape(x.username?'@'+x.username:x.sellerName)+'</b><span class="market-pill">В продаже</span></div><div class="market-rate" style="margin:8px 0">'+marketMoney(x.rate)+' ₽ <small style="font-size:12px;color:#b9cce5">/ 1 000 VKC</small></div><div class="note">Выставлено: <b>'+Number(x.amount).toLocaleString('ru-RU')+' VKC</b><br>Нажми, чтобы посмотреть условия покупки</div></button>').join(''):'<div class="calc">Пока нет объявлений других игроков.</div>';
-  mineBox.innerHTML=mine.length?mine.map(x=>'<div class="market-listing"><div style="display:flex;justify-content:space-between;gap:8px"><b>Моё объявление</b><span class="market-pill">Активно</span></div><div class="market-rate" style="margin:8px 0">'+marketMoney(x.rate)+' ₽ / 1 000 VKC</div><div class="note">'+Number(x.amount).toLocaleString('ru-RU')+' VKC · сумма сделки '+marketMoney(x.amount/1000*x.rate)+' ₽</div><div class="market-listing-actions"><button class="secondary" onclick="cancelMarketListing(&quot;'+String(x.id)+'&quot;)">Отменить объявление</button></div></div>').join(''):'<div class="calc">У тебя нет активных объявлений.</div>';
+  mineBox.innerHTML=mine.length?mine.map(x=>'<div class="market-listing"><div style="display:flex;justify-content:space-between;gap:8px"><b>Моё объявление</b><span class="market-pill">Активно</span></div><div class="market-rate" style="margin:8px 0">'+marketMoney(x.rate)+' ₽ / 1 000 VKC</div><div class="note">'+Number(x.amount).toLocaleString('ru-RU')+' VKC · сумма сделки '+marketMoney(x.amount/1000*x.rate)+' ₽</div><div class="market-listing-actions"><button class="secondary" onclick="editMarketListing(&quot;'+String(x.id)+'&quot;)">Изменить</button><button class="secondary" onclick="cancelMarketListing(&quot;'+String(x.id)+'&quot;)">Удалить и вернуть монеты</button></div></div>').join(''):'<div class="calc">У тебя нет активных объявлений.</div>';
  }catch(e){if(listingsBox)listingsBox.innerHTML='<div class="calc">Не удалось загрузить рынок. Попробуй обновить.</div>';if(mineBox)mineBox.innerHTML='';}
 }
 async function createMarketListing(){
@@ -235,6 +235,26 @@ async function marketSellerAction(action,id){
  await loadMarket();
  }catch(e){alert(e.message||'Ошибка рынка.')}
 }
+
+async function editMarketListing(id){
+ const item=(window.marketMyListings||[]).find(x=>x.id===id);if(!item){alert('Объявление не найдено. Обнови рынок.');return}
+ $('title').textContent='Изменить объявление';$('subtitle').textContent='Количество и курс можно менять в любой момент';
+ $('body').innerHTML='<div class="market-listing"><div class="note">Количество монет (минимум 50 000)</div><input id="editMarketAmount" type="number" min="50000" step="1000" value="'+Number(item.amount)+'" style="width:100%;margin:8px 0 14px"><div class="note">Цена за 1 000 VKC (₽)</div><input id="editMarketRate" type="number" min="0.01" step="0.01" value="'+Number(item.rate)+'" style="width:100%;margin:8px 0 14px"><div id="editMarketStatus" class="note"></div><button class="primary" style="width:100%;margin-top:10px" onclick="saveMarketListingEdit(&quot;'+String(item.id)+'&quot;)">Сохранить изменения</button><button class="secondary" style="width:100%;margin-top:8px" onclick="openMarket()">Назад к рынку</button></div>';
+}
+async function saveMarketListingEdit(id){
+ const amount=Number($('editMarketAmount')?.value),rate=Number($('editMarketRate')?.value),status=$('editMarketStatus');
+ if(!Number.isSafeInteger(amount)||amount<50000){if(status)status.textContent='Минимум 50 000 VKC.';return}
+ if(!Number.isFinite(rate)||rate<=0){if(status)status.textContent='Укажи цену больше нуля.';return}
+ try{
+  const r=await fetch('/api/market',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'edit',clientId:onlineClientId,listingId:id,amount,rate})}),d=await r.json();
+  if(!r.ok)throw new Error(d.error||'Не удалось изменить объявление');
+  if(d.balance!==undefined)gameWallet.balance=Number(d.balance);
+  saveGameWallet();syncPlayer();
+  if(status)status.textContent='Объявление обновлено.';
+  await openMarket();
+ }catch(e){if(status)status.textContent=e.message||'Ошибка изменения объявления.'}
+}
+
 async function cancelMarketListing(id){const ok=confirm('Отменить объявление? Монеты вернутся на твой игровой баланс.');if(ok)await marketSellerAction('cancel',id)}
 async function completeMarketListing(id){const ok=confirm('Подтверждаешь, что сделка успешно завершена и покупатель оплатил монеты? Объявление будет удалено с рынка.');if(ok)await marketSellerAction('complete',id)}
 function contactMarketSeller(username){const clean=String(username||'').replace(/^@/,'').trim();if(!clean){alert('У продавца не указан Telegram username, связаться через кнопку не получится.');return}const url='https://t.me/'+encodeURIComponent(clean);try{if(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.openTelegramLink){window.Telegram.WebApp.openTelegramLink(url);return}}catch(e){}window.location.href=url}
