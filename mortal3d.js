@@ -1,6 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/GLTFLoader.js';
 
-let renderer, scene, camera, raf, resizeObserver, actors=[], running=false, last=0, arenaEl;
+let renderer, scene, camera, raf, resizeObserver, actors=[], running=false, last=0, arenaEl;\nconst gltfLoader=new GLTFLoader();
 const clock = new THREE.Clock();
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
@@ -80,7 +81,7 @@ function buildArena(){
  actors[1].root.position.set(2.2,0,0);actors[1].root.rotation.y=Math.PI-.2;
  scene.add(actors[0].root,actors[1].root);
 }
-const embers=[];
+const embers=[];\nfunction spawnBurst(x,y,z,color){if(!scene)return;for(let i=0;i<10;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.035+Math.random()*.035,6,5),new THREE.MeshBasicMaterial({color}));p.position.set(x,y,z);p.userData.v=new THREE.Vector3((Math.random()-.5)*4,Math.random()*3,(Math.random()-.5)*2);p.userData.life=.35+Math.random()*.3;scene.add(p);bursts.push(p)}}\nconst bursts=[];\nasync function loadLicensedModel(kind, fallback){try{const url=kind==='subzero'?'/assets/subzero.glb':'/assets/scorpion.glb';const gltf=await gltfLoader.loadAsync(url);if(!running||!scene)return;const model=gltf.scene;model.scale.setScalar(1.6);model.position.copy(fallback.root.position);model.rotation.copy(fallback.root.rotation);scene.remove(fallback.root);scene.add(model);fallback.root=model;fallback.externalModel=true;if(gltf.animations&&gltf.animations.length){fallback.mixer=new THREE.AnimationMixer(model);fallback.clips=gltf.animations;fallback.mixer.clipAction(gltf.animations[0]).play()}}catch(e){/* Optional licensed GLB absent: keep generated fighter. */}}
 function setupRenderer(){
  renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.7));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
@@ -108,7 +109,7 @@ function animate(now){
   a.root.position.x=clamp(a.root.position.x,-3.5,3.5);
   a.torso.rotation.z=(a.hit>0?-.35:0)+Math.sin(a.phase)*.025;
   a.legs.forEach((l,i)=>{l.group.rotation.x=a.attack>0?(i===0?-.85:.35):Math.sin(a.phase+(i*Math.PI))*.12});
-  a.arms.forEach((arm,i)=>{arm.group.rotation.x=a.attack>0?(i===0?-1.35:.35):Math.sin(a.phase+i)*.08;arm.group.rotation.z=a.attack>0?arm.side*(i===0?-.75:.2):arm.side*(.05+Math.sin(a.phase+i)*.05)});
+  a.arms.forEach((arm,i)=>{arm.group.rotation.x=a.blocking?(i===0?-1.0:-.8):a.attack>0?(i===0?-1.35:.35):Math.sin(a.phase+i)*.08;arm.group.rotation.z=a.blocking?arm.side*.25:a.attack>0?arm.side*(i===0?-.75:.2):arm.side*(.05+Math.sin(a.phase+i)*.05)});}
   if(a.attackCooldown<=0&&a.hit<=0){
    a.attackCooldown=.8+Math.random()*1.4;
    const victim=actors.find(x=>x!==a);
@@ -120,8 +121,8 @@ function animate(now){
 }
 export function startMortal3D(){
  stopMortal3D();arenaEl=document.getElementById('mkArena');if(!arenaEl)return;
- try{embers.length=0;buildArena();setupRenderer();arenaEl.querySelectorAll('.mk-vs,.mk-fighter,.mk-ice,.mk-fire,.mk-flash,.impact-flash,.volcano-sky,.volcano-mountain,.lava-river,.lava-crack').forEach(el=>el.style.display='none');running=true;last=0;raf=requestAnimationFrame(animate)}
+ try{embers.length=0;bursts.length=0;buildArena();setupRenderer();loadLicensedModel('subzero',actors[0]);loadLicensedModel('scorpion',actors[1]);arenaEl.querySelectorAll('.mk-vs,.mk-fighter,.mk-ice,.mk-fire,.mk-flash,.impact-flash,.volcano-sky,.volcano-mountain,.lava-river,.lava-crack').forEach(el=>el.style.display='none');running=true;last=0;raf=requestAnimationFrame(animate)}
  catch(e){console.error('3D arena init failed',e);stopMortal3D();if(arenaEl)arenaEl.insertAdjacentHTML('beforeend','<div style="position:absolute;inset:0;display:grid;place-items:center;background:#18050b;color:#fff;padding:18px;text-align:center;z-index:8">3D-сцена недоступна в этом браузере. Обнови страницу или отключи энергосбережение.</div>')}
 }
-export function stopMortal3D(){running=false;if(raf)cancelAnimationFrame(raf);raf=null;if(resizeObserver)resizeObserver.disconnect();resizeObserver=null;if(renderer){renderer.dispose();renderer.domElement.remove();renderer=null}if(scene){scene.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material.dispose()}})}scene=null;camera=null;actors=[];embers.length=0}
+export function stopMortal3D(){running=false;if(raf)cancelAnimationFrame(raf);raf=null;if(resizeObserver)resizeObserver.disconnect();resizeObserver=null;if(renderer){renderer.dispose();renderer.domElement.remove();renderer=null}if(scene){scene.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material.dispose()}})}scene=null;camera=null;actors=[];embers.length=0;bursts.length=0}
 window.startMortal3D=startMortal3D;window.stopMortal3D=stopMortal3D;
