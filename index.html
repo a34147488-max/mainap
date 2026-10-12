@@ -11,7 +11,9 @@
 <footer class="footer"><b>● КУРСЫ</b>Продажа : 10.76₽ за 11600.000<br>Скупка : 4.65₽ за 11600.000<br><span style="opacity:.6">VK COIN EXCHANGE</span></footer></main>
 <div class="overlay" id="overlay"><section class="sheet"><div class="sheethead"><div><h2 id="title">Продать монеты</h2><p id="subtitle">Укажи количество VK COIN</p></div><button class="close" onclick="closeSheet()">×</button></div><div id="body"></div></section></div>
 <script>
-let mode='sell',amount=0,currentBank='',currentDetails='';\nconst SUPABASE_URL='https://YOUR_PROJECT_REF.supabase.co';\nconst SUPABASE_ANON_KEY='YOUR_SUPABASE_ANON_KEY';const $=id=>document.getElementById(id),sellRate=10.76/11600,buyRate=4.65/11600;
+let mode='sell',amount=0,currentBank='',currentDetails='';
+const SUPABASE_URL='https://YOUR_PROJECT_REF.supabase.co';
+const SUPABASE_ANON_KEY='YOUR_SUPABASE_ANON_KEY';const $=id=>document.getElementById(id),sellRate=10.76/11600,buyRate=4.65/11600;
 const money=n=>Number(n||0).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₽';
 const coins=n=>Number(n||0).toLocaleString('ru-RU',{minimumFractionDigits:3,maximumFractionDigits:3});
 function openSheet(m){mode=m;$('overlay').classList.add('open');form()}
