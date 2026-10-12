@@ -4,6 +4,40 @@ const path = require("node:path");
 
 const root = __dirname;
 const port = Number(process.env.PORT) || 3000;
+const onlineClients = new Map();
+const ONLINE_TTL_MS = 60_000;
+
+  if (requestUrl.pathname === "/api/online") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    const now = Date.now();
+    for (const [id, seen] of onlineClients) {
+      if (now - seen > ONLINE_TTL_MS) onlineClients.delete(id);
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", chunk => { body += chunk; if (body.length > 2048) req.destroy(); });
+      req.on("end", () => {
+        let clientId = "";
+        try { clientId = String(JSON.parse(body || "{}").clientId || ""); } catch {}
+        if (!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId)) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ error: "Invalid client ID" }));
+        }
+        onlineClients.set(clientId, Date.now());
+        res.writeHead(200);
+        return res.end(JSON.stringify({ online: onlineClients.size }));
+      });
+      return;
+    }
+    if (req.method !== "GET") {
+      res.writeHead(405, { Allow: "GET, POST" });
+      return res.end(JSON.stringify({ error: "Method not allowed" }));
+    }
+    res.writeHead(200);
+    return res.end(JSON.stringify({ online: onlineClients.size }));
+  }
+
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
