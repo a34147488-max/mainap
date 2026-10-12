@@ -196,9 +196,9 @@ http.createServer(async (req, res) => {
     const rankMode = requestUrl.searchParams.get("mode") || "wins";
     const allPlayers = [...registeredPlayers.values()];
     const players = allPlayers
-      .sort((a, b) => rankMode === "referrals" ? (b.referrals || 0) - (a.referrals || 0) : (b.totalWon || 0) - (a.totalWon || 0) || a.registeredAt.localeCompare(b.registeredAt))
+      .sort((a, b) => rankMode === "referrals" ? (b.referrals || 0) - (a.referrals || 0) : rankMode === "balance" ? (b.balance || 0) - (a.balance || 0) || a.registeredAt.localeCompare(b.registeredAt) : (b.totalWon || 0) - (a.totalWon || 0) || a.registeredAt.localeCompare(b.registeredAt))
       .slice(0, 100)
-      .map((p) => ({ name: p.name, username: p.username || "", photoUrl: p.photoUrl || "", telegramId: p.telegramId || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, registeredAt: p.registeredAt }));
+      .map((p) => ({ name: p.name, username: p.username || "", photoUrl: p.photoUrl || "", telegramId: p.telegramId || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, balance: p.balance || 0, registeredAt: p.registeredAt }));
     res.writeHead(200);
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
   }
