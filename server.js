@@ -216,10 +216,20 @@ http.createServer(async (req, res) => {
       }
       const idx=marketListings.findIndex(x=>x.id===listingId && x.sellerId===clientId);
       if (idx<0) { res.writeHead(404); return res.end(JSON.stringify({error:"Объявление не найдено или оно уже закрыто."})); }
+      if (action==="edit") {
+        const amount=Number(input.amount),rate=Number(input.rate),item=marketListings[idx];
+        if(!Number.isSafeInteger(amount)||amount<50000||amount>1e12||!Number.isFinite(rate)||rate<=0||rate>1e9){res.writeHead(400);return res.end(JSON.stringify({error:"Минимум 50 000 монет и корректный курс за 1 000 монет."}));}
+        const difference=amount-item.amount;
+        if(difference>0&&player.balance<difference){res.writeHead(400);return res.end(JSON.stringify({error:"На балансе недостаточно монет для увеличения количества в объявлении."}));}
+        player.balance=Math.round((player.balance-difference)*1000)/1000;
+        item.amount=amount;item.rate=Math.round(rate*100)/100;item.updatedAt=new Date().toISOString();
+        marketHistory.push({at:item.updatedAt,rate:item.rate,kind:"edit"});persistPlayerData();
+        res.writeHead(200);return res.end(JSON.stringify({success:true,listing:item,balance:player.balance}));
+      }
       if (action==="cancel") {
         const [item]=marketListings.splice(idx,1); player.balance=Math.round((player.balance+item.amount)*1000)/1000;
         marketHistory.push({at:new Date().toISOString(),rate:item.rate,kind:"cancel"}); persistPlayerData();
-        res.writeHead(200); return res.end(JSON.stringify({success:true,balance:player.balance}));
+        res.writeHead(200); return res.end(JSON.stringify({success:true,balance:player.balance,returnedAmount:item.amount}));
       }
       if (action==="complete") {
         const [item]=marketListings.splice(idx,1);
