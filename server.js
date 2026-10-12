@@ -212,7 +212,7 @@ http.createServer(async (req, res) => {
       req.on("end", () => {
         let input; try { input = JSON.parse(body || "{}"); } catch { res.writeHead(400); return res.end(JSON.stringify({error:"Invalid JSON"})); }
         const clientId=String(input.clientId||""), type=String(input.type||""), bet=Number(input.bet), net=Number(input.net);
-        if(!registeredPlayers.has(clientId)||!["olympus","bandit","wheel","flip","dice"].includes(type)||!Number.isFinite(bet)||bet<0||!Number.isFinite(net)){res.writeHead(400);return res.end(JSON.stringify({error:"Invalid round"}));}
+        if(!registeredPlayers.has(clientId)||!["olympus","bandit","wheel","flip","dice","mines"].includes(type)||!Number.isFinite(bet)||bet<0||!Number.isFinite(net)){res.writeHead(400);return res.end(JSON.stringify({error:"Invalid round"}));}
         const p=registeredPlayers.get(clientId);
         playerGameRounds.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),clientId,type,username:p.username||p.name,bet:Math.round(bet*1000)/1000,net:Math.round(net*1000)/1000,label:String(input.label||"Раунд").slice(0,100),createdAt:new Date().toISOString()});
         if(playerGameRounds.length>500)playerGameRounds.length=500;
