@@ -8,6 +8,7 @@ const io = new Server(server, { cors: { origin: true, credentials: true } });
 const PORT = process.env.PORT || 3000;
 const rooms = new Map();
 const users = new Map();
+const friendships = new Map();
 
 app.use(express.static(__dirname));
 app.get('/health', (_req, res) => res.json({ ok: true, app: 'Бутылочка' }));
@@ -68,6 +69,34 @@ io.on('connection', socket => {
       joinedAt: previous ? previous.joinedAt : Date.now(), roomId: null
     });
     cb({ ok: true, user: publicUser(users.get(socket.id)) });
+  });
+  socket.on('friends:list', (cb = () => {}) => {
+    const me=users.get(socket.id); if(!me)return cb({ok:false,error:'Сначала создай профиль.'});
+    const ids=friendships.get(socket.id)||new Set();
+    cb({ok:true,users:[...users.values()].filter(u=>u.id!==socket.id).map(u=>({id:u.id,name:u.name,username:u.username,avatar:u.avatar,online:true,isFriend:ids.has(u.id),roomId:u.roomId}))});
+  });
+  socket.on('friends:add', (payload = {}, cb = () => {}) => {
+    const me=users.get(socket.id),target=users.get(String(payload.targetId||''));
+    if(!me||!target||target.id===me.id)return cb({ok:false,error:'Игрок недоступен.'});
+    if(!friendships.has(socket.id))friendships.set(socket.id,new Set());
+    if(!friendships.has(target.id))friendships.set(target.id,new Set());
+    friendships.get(socket.id).add(target.id);friendships.get(target.id).add(socket.id);
+    cb({ok:true});io.to(target.id).emit('friends:updated',{name:me.name});
+  });
+  socket.on('friends:invite', (payload = {}, cb = () => {}) => {
+    const me=users.get(socket.id),room=roomFor(socket),target=users.get(String(payload.targetId||''));
+    if(!me||!room)return cb({ok:false,error:'Сначала зайди за стол.'});
+    if(!target||!(friendships.get(socket.id)||new Set()).has(target.id))return cb({ok:false,error:'Добавь игрока в друзья.'});
+    if(room.players.size>=5)return cb({ok:false,error:'Стол заполнен.'});
+    io.to(target.id).emit('room:invite',{roomId:room.id,from:me.name});cb({ok:true});
+  });
+  socket.on('room:accept-invite', (payload = {}, cb = () => {}) => {
+    const u=users.get(socket.id),room=rooms.get(String(payload.roomId||'').toUpperCase());
+    if(!u||!room)return cb({ok:false,error:'Стол не найден.'});
+    if(room.players.size>=5)return cb({ok:false,error:'Стол заполнен.'});
+    if(room.spinning||room.currentPicker)return cb({ok:false,error:'Идёт ход.'});
+    leaveRoom(socket);u.roomId=room.id;room.players.set(socket.id,u);socket.join(room.id);
+    emitRoom(room.id);cb({ok:true,room:roomState(room.id)});
   });
   socket.on('gifts:list', cb => { if(typeof cb==='function') cb(GIFT_CATALOG); });
   socket.on('gift:send', (payload={},cb=()=>{}) => { const sender=users.get(socket.id), room=roomFor(socket); if(!sender||!room)return cb({ok:false,error:'Сначала зайди за стол.'}); refreshCredits(sender); const target=room.players.get(String(payload.targetId||'')); const gift=GIFT_CATALOG.find(g=>g.id===payload.giftId); if(!target||target.id===sender.id)return cb({ok:false,error:'Выбери другого игрока за столом.'}); if(!gift)return cb({ok:false,error:'Подарок не найден.'}); if(sender.credits<gift.price)return cb({ok:false,error:'Недостаточно кредитов.'}); sender.credits-=gift.price; const received={...gift,fromId:sender.id,fromName:sender.name,at:Date.now()}; target.gifts=target.gifts||[]; target.gifts.push(received); io.to(room.id).emit('gift:received',{targetId:target.id,gift:received}); emitRoom(room.id); cb({ok:true,credits:sender.credits,gift}); });
@@ -136,7 +165,7 @@ io.on('connection', socket => {
     emitRoom(room.id);
     cb({ ok: true });
   });
-  socket.on('disconnect', () => { leaveRoom(socket); users.delete(socket.id); });
+  socket.on('disconnect', () => { leaveRoom(socket); users.delete(socket.id); friendships.delete(socket.id); for(const set of friendships.values())set.delete(socket.id); });
 });
 
 server.listen(PORT, '0.0.0.0', () => console.log('Бутылочка listening on ' + PORT));
