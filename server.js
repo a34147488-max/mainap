@@ -270,9 +270,16 @@ http.createServer(async (req, res) => {
         if(!buyer){res.writeHead(404);return res.end(JSON.stringify({error:"Покупатель с таким username не зарегистрирован в VKcoin. Попроси его открыть приложение и зарегистрироваться."}));}
         if(buyer.id===clientId){res.writeHead(400);return res.end(JSON.stringify({error:"Нельзя указать себя покупателем."}));}
         const [item]=marketListings.splice(idx,1);
+        const completedAt=new Date().toISOString();
         buyer.pendingCredits=Math.round(((Number(buyer.pendingCredits)||0)+Number(item.amount))*1000)/1000;
-        marketHistory.push({at:new Date().toISOString(),rate:item.rate,kind:"sale"}); persistPlayerData();
-        res.writeHead(200); return res.end(JSON.stringify({success:true,listing:item,buyerUsername,buyerAmount:item.amount}));
+        marketHistory.push({
+          at:completedAt, rate:item.rate, kind:"sale", status:"Успешно",
+          listingId:item.id, sellerId:item.sellerId, sellerName:item.sellerName||"Продавец",
+          sellerUsername:player.username||"", buyerId:buyer.id, buyerUsername,
+          amount:Number(item.amount), total:Math.round((Number(item.amount)/1000*Number(item.rate))*100)/100
+        });
+        persistPlayerData();
+        res.writeHead(200); return res.end(JSON.stringify({success:true,status:"Успешно",listing:item,buyerUsername,buyerAmount:item.amount,completedAt}));
       }
       res.writeHead(400); return res.end(JSON.stringify({error:"Неизвестное действие."}));
     });
