@@ -19,9 +19,10 @@ try {
   for (const id of (saved.referredPlayerIds || [])) referredPlayerIds.add(id);
   for (const item of (saved.marketListings || [])) marketListings.push(item);
   for (const item of (saved.marketHistory || [])) marketHistory.push(item);
+  for (const round of (saved.playerGameRounds || [])) if (round && round.createdAt) playerGameRounds.push(round);
 } catch {}
 function persistPlayerData() {
-  try { fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify({players:[...registeredPlayers.values()], transfers:playerTransfers.slice(0,1000), referredPlayerIds:[...referredPlayerIds], marketListings, marketHistory:marketHistory.slice(-300)})); } catch (e) { console.error('Could not persist player data:', e.message); }
+  try { fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify({players:[...registeredPlayers.values()], transfers:playerTransfers.slice(0,1000), referredPlayerIds:[...referredPlayerIds], marketListings, marketHistory:marketHistory.slice(-300), playerGameRounds:playerGameRounds.slice(0,10000)})); } catch (e) { console.error('Could not persist player data:', e.message); }
 }
 // One-time recovery for transfers created before pending recipient credits existed.
 // Older profile syncs could overwrite the recipient's server balance with stale browser data.
@@ -374,6 +375,31 @@ http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
   }
 
+  if (requestUrl.pathname === "/api/players/monthly-top") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "GET") { res.writeHead(405, { Allow: "GET" }); return res.end(JSON.stringify({ error: "Method not allowed" })); }
+    const periodStart = new Date("2026-10-13T00:00:00+05:00").getTime();
+    const periodEnd = periodStart + 30 * 24 * 60 * 60 * 1000;
+    const totals = new Map();
+    for (const round of playerGameRounds) {
+      const ts = Date.parse(round.createdAt || "");
+      if (!Number.isFinite(ts) || ts < periodStart || ts >= periodEnd || !registeredPlayers.has(round.clientId)) continue;
+      const p = registeredPlayers.get(round.clientId);
+      const amount = Math.max(0, Number(round.net) || 0);
+      if (amount <= 0) continue;
+      const item = totals.get(round.clientId) || { clientId: round.clientId, monthlyWon: 0 };
+      item.monthlyWon += amount;
+      totals.set(round.clientId, item);
+    }
+    const players = [...totals.values()].map(item => {
+      const p = registeredPlayers.get(item.clientId);
+      return { name: p.name || p.username || "Игрок", username: p.username || "", photoUrl: p.photoUrl || "", monthlyWon: Math.round(item.monthlyWon * 1000) / 1000, premiumActive: getPremiumUntil(p) > Date.now() };
+    }).sort((a,b) => b.monthlyWon - a.monthlyWon).slice(0,100);
+    res.writeHead(200);
+    return res.end(JSON.stringify({ players, startsAt: periodStart, endsAt: periodEnd, remainingMs: Math.max(0, periodEnd - Date.now()) }));
+  }
+
   if (requestUrl.pathname === "/api/live-game") {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
@@ -419,7 +445,8 @@ http.createServer(async (req, res) => {
         if(!registeredPlayers.has(clientId)||!["ladder","nvuti","crash","olympus","bandit","wheel","flip","dice","cups","mines","csgo"].includes(type)||!Number.isFinite(bet)||bet<0||!Number.isFinite(net)){res.writeHead(400);return res.end(JSON.stringify({error:"Invalid round"}));}
         const p=registeredPlayers.get(clientId);
         playerGameRounds.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),clientId,type,username:p.username||p.name,bet:Math.round(bet*1000)/1000,net:Math.round(net*1000)/1000,label:String(input.label||"Раунд").slice(0,100),createdAt:new Date().toISOString()});
-        if(playerGameRounds.length>500)playerGameRounds.length=500;
+        if(playerGameRounds.length>10000)playerGameRounds.length=10000;
+        persistPlayerData();
         res.writeHead(200);return res.end(JSON.stringify({saved:true}));
       });
       return;
