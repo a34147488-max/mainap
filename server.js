@@ -78,7 +78,7 @@ io.on('connection', socket => {
   socket.on('friends:list', (cb = () => {}) => {
     const me=users.get(socket.id); if(!me)return cb({ok:false,error:'Сначала создай профиль.'});
     const ids=friendships.get(socket.id)||new Set();
-    cb({ok:true,users:[...users.values()].filter(u=>u.id!==socket.id).map(u=>({id:u.id,name:u.name,username:u.username,avatar:u.avatar,online:true,isFriend:ids.has(u.id),roomId:u.roomId}))});
+    cb({ok:true,users:[...users.values()].filter(u=>u.id!==socket.id).map(u=>({...publicUser(u),online:true,isFriend:ids.has(u.id),roomId:u.roomId}))});
   });
   socket.on('friends:add', (payload = {}, cb = () => {}) => {
     const me=users.get(socket.id),target=users.get(String(payload.targetId||''));
