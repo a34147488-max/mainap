@@ -210,7 +210,10 @@ http.createServer(async (req, res) => {
       if(recipient.id===sender.id){res.writeHead(400);return res.end(JSON.stringify({error:"Нельзя перевести монеты самому себе."}));}
       if(sender.balance<amount){res.writeHead(400);return res.end(JSON.stringify({error:"На серверном балансе недостаточно VKC. Обнови приложение и попробуй снова."}));}
       sender.balance=Math.round((sender.balance-amount)*1000)/1000;
+      // Queue the credit for the recipient's next profile sync. Their browser wallet is
+      // local-first; without this pending credit, a stale client balance overwrites the transfer.
       recipient.balance=Math.round((recipient.balance+amount)*1000)/1000;
+      recipient.pendingCredits=Math.round(((Number(recipient.pendingCredits)||0)+amount)*1000)/1000;
       const entry={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),senderId,recipientId:recipient.id,amount,createdAt:new Date().toISOString(),senderName:sender.name,recipientName:recipient.name};
       playerTransfers.unshift(entry); if(playerTransfers.length>1000)playerTransfers.length=1000;
       persistPlayerData();
