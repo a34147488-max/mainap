@@ -362,7 +362,7 @@ http.createServer(async (req, res) => {
       const p=registeredPlayers.get(clientId),now=Date.now();
       if(Number(p.premiumUntil||0)>now){res.writeHead(409);return res.end(JSON.stringify({error:"У тебя уже активен PREMIUM"}))}
       premiumPromos[code]={usedBy:clientId,usedAt:now};
-      p.premiumUntil=now+7*86400000;p.autoClickEarned=Number(p.autoClickEarned||0);p.premiumStartedAt=now;
+      p.premiumUntil=now+7*86400000;p.autoClickEarned=0;p.autoClickLastAt=now;p.premiumStartedAt=now;
       try{savePremiumPromos();persistPlayerData()}catch(e){premiumPromos[code]={usedBy:null,usedAt:null};res.writeHead(500);return res.end(JSON.stringify({error:"Не удалось сохранить PREMIUM"}))}
       res.writeHead(200);return res.end(JSON.stringify({success:true,until:p.premiumUntil,daysLeft:7,autoClickCap:75000,clickMultiplier:5}));
     });return;
