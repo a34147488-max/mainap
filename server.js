@@ -32,7 +32,7 @@ let premiumPromos = {};
 try { premiumPromos = JSON.parse(fs.readFileSync(PREMIUM_FILE, 'utf8')); } catch {}
 for (const code of PREMIUM_CODES) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 function savePremiumPromos(){ fs.writeFileSync(PREMIUM_FILE, JSON.stringify(premiumPromos, null, 2)); }
-\nconst OBnova_FILE = path.join(root, '.obnova-activations.json');
+const OBnova_FILE = path.join(root, '.obnova-activations.json');
 let savedObnovaUsers=[];try{savedObnovaUsers=JSON.parse(fs.readFileSync(OBnova_FILE,'utf8'))}catch{}
 const obnovaUsers = new Set(Array.isArray(savedObnovaUsers)?savedObnovaUsers:[]);
 
