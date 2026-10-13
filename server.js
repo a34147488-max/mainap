@@ -101,9 +101,15 @@ io.on('connection', socket => {
     if(!process.env.TELEGRAM_BOT_TOKEN)return cb({ok:false,message:'Проверка подписки пока не настроена. Администратору нужно добавить TELEGRAM_BOT_TOKEN в Railway и дать боту права администратора канала.'});
     try{const response=await fetch('https://api.telegram.org/bot'+process.env.TELEGRAM_BOT_TOKEN+'/getChatMember?chat_id=@vkcoinnew&user_id='+encodeURIComponent(u.telegramId));const data=await response.json();if(!data.ok)return cb({ok:false,error:'Telegram не смог проверить подписку. Проверь права бота в канале.'});const status=data.result&&data.result.status;if(!['member','administrator','creator'].includes(status))return cb({ok:false,message:'Подписка не найдена. Подпишись на @vkcoinnew и попробуй снова.'});u.credits=Math.min(100,u.credits+50);u.subscriptionBonusClaimed=true;channelBonusClaims.add(u.telegramId);await persistUser(u);cb({ok:true,credits:u.credits,message:'Подписка подтверждена! Начислено 50 кредитов.'});}catch(e){cb({ok:false,error:'Не удалось проверить подписку. Попробуй позже.'})}
   });
-  socket.on('tops:list', (cb = () => {}) => {
+  socket.on('tops:list', async (cb = () => {}) => {
     if(typeof cb!=='function') return;
-    cb({ok:true,users:[...users.values()].map(publicUser)});
+    try {
+      if(pool){await dbReady;const r=await pool.query('SELECT account_id,profile FROM game_profiles');for(const row of r.rows)savedProfiles.set(row.account_id,row.profile)}
+      const all=new Map();
+      for(const [id,p] of savedProfiles)all.set(id,{...p,id:id.startsWith('tg:')?id.slice(3):id,accountKey:id,online:false});
+      for(const u of users.values())all.set(accountId(u),{...publicUser(u),accountKey:accountId(u),online:true});
+      cb({ok:true,users:[...all.values()]});
+    }catch(e){console.error('Top load failed:',e.message);cb({ok:true,users:[...users.values()].map(u=>({...publicUser(u),online:true}))})}
   });
   socket.on('friends:list', async (cb = () => {}) => {
     const me=users.get(socket.id);if(!me)return cb({ok:false,error:'Сначала создай профиль.'});
@@ -141,7 +147,7 @@ io.on('connection', socket => {
     emitRoom(room.id);cb({ok:true,room:roomState(room.id)});
   });
   socket.on('gifts:list', cb => { if(typeof cb==='function') cb(GIFT_CATALOG); });
-  socket.on('gift:send', (payload={},cb=()=>{}) => { const sender=users.get(socket.id), room=roomFor(socket); if(!sender||!room)return cb({ok:false,error:'Сначала зайди за стол.'}); refreshCredits(sender); const target=room.players.get(String(payload.targetId||'')); const gift=GIFT_CATALOG.find(g=>g.id===payload.giftId); if(!target||target.id===sender.id)return cb({ok:false,error:'Выбери другого игрока за столом.'}); if(!gift)return cb({ok:false,error:'Подарок не найден.'}); if(sender.credits<gift.price)return cb({ok:false,error:'Недостаточно кредитов.'}); sender.credits-=gift.price; const received={...gift,fromId:sender.id,fromName:sender.name,at:Date.now()}; target.gifts=target.gifts||[]; target.gifts.push(received);void persistUser(sender);void persistUser(target); io.to(room.id).emit('gift:received',{targetId:target.id,gift:received}); emitRoom(room.id); cb({ok:true,credits:sender.credits,gift}); });
+  socket.on('gift:send', (payload={},cb=()=>{}) => { const sender=users.get(socket.id), room=roomFor(socket); if(!sender||!room)return cb({ok:false,error:'Сначала зайди за стол.'}); refreshCredits(sender); const target=room.players.get(String(payload.targetId||'')); const gift=GIFT_CATALOG.find(g=>g.id===payload.giftId); if(!target||target.id===sender.id)return cb({ok:false,error:'Выбери другого игрока за столом.'}); if(!gift)return cb({ok:false,error:'Подарок не найден.'}); if(sender.credits<gift.price)return cb({ok:false,error:'Недостаточно кредитов.'}); sender.credits-=gift.price; const received={...gift,fromId:sender.id,fromName:sender.name,at:Date.now()}; target.gifts=target.gifts||[]; target.gifts.push(received);void persistUser(sender);void persistUser(target); io.to(room.id).emit('gift:received',{targetId:target.id,gift:received,senderId:sender.id,senderName:sender.name,targetName:target.name}); emitRoom(room.id); cb({ok:true,credits:sender.credits,gift}); });
   socket.on('rooms:list', cb => {
     if (typeof cb !== 'function') return;
     cb([...rooms.values()].map(r => ({ id: r.id, count: r.players.size, players: [...r.players.values()].map(publicUser), spinning: r.spinning })));
@@ -187,10 +193,32 @@ io.on('connection', socket => {
       }
       latest.spinning = false;
       latest.currentPicker = targetId;
-      io.to(targetId).emit('turn:choose', { picker: publicUser(latest.players.get(targetId)), roomId: latest.id });
+      io.to(latest.id).emit('turn:choose', { picker: publicUser(latest.players.get(targetId)), roomId: latest.id });
       emitRoom(latest.id);
     }, 3000);
     cb({ ok: true });
+  });
+  socket.on('reaction:send', (payload = {}, cb = () => {}) => {
+    const sender=users.get(socket.id),room=roomFor(socket),kind=payload.kind;
+    if(!sender||!room||!room.currentPicker)return cb({ok:false,error:'Сейчас нет выбранного бутылочкой игрока.'});
+    const target=room.players.get(room.currentPicker);
+    if(!target||target.id===sender.id)return cb({ok:false,error:'Нельзя отправить реакцию самому себе.'});
+    if(!['kiss','dislike'].includes(kind))return cb({ok:false,error:'Неизвестная реакция.'});
+    if(kind==='kiss'){target.kisses++;if(target.dailyKissesDay!==dayKey()){target.dailyKissesDay=dayKey();target.dailyKisses=0;target.dailyKissBonusClaimed=false}target.dailyKisses=(target.dailyKisses||0)+1;if(target.dailyKisses>50&&!target.dailyKissBonusClaimed){target.credits=100;target.dailyKissBonusClaimed=true;io.to(target.id).emit('credits:updated',{userId:target.id,credits:100,reason:'daily-kisses'})}}else target.dislikes++;
+    void persistUser(target);io.to(room.id).emit('reaction:received',{sender:publicUser(sender),target:publicUser(target),kind});emitRoom(room.id);cb({ok:true});
+  });
+  socket.on('credits:send', async (payload={},cb=()=>{})=>{
+    const sender=users.get(socket.id),target=users.get(String(payload.targetId||'')),amount=Number(payload.amount);
+    if(!sender||!target)return cb({ok:false,error:'Игрок недоступен.'});
+    if(target.id===sender.id||accountId(target)===accountId(sender))return cb({ok:false,error:'Нельзя отправить кредиты самому себе.'});
+    refreshCredits(sender);refreshCredits(target);
+    if(!Number.isInteger(amount)||amount<1||amount>100)return cb({ok:false,error:'Укажи сумму от 1 до 100 кредитов.'});
+    if(sender.credits<amount)return cb({ok:false,error:'Недостаточно кредитов.'});
+    sender.credits-=amount;target.credits=Math.min(100,target.credits+amount);
+    await persistUser(sender);await persistUser(target);
+    io.to(target.id).emit('credits:received',{fromName:sender.name,amount,credits:target.credits});
+    io.to(sender.id).emit('credits:updated',{userId:sender.id,credits:sender.credits,reason:'transfer'});
+    cb({ok:true,credits:sender.credits,targetCredits:target.credits});
   });
   socket.on('turn:vote', (payload = {}, cb = () => {}) => {
     const room = roomFor(socket);
