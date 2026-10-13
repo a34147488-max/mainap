@@ -7,6 +7,7 @@ const port = Number(process.env.PORT) || 3000;
 const onlineClients = new Map();
 const registeredPlayers = new Map();
 const playerTransfers = [];
+const referralWithdrawals = [];
 const playerGameRounds = [];
 const marketListings = [];
 const marketHistory = [];
@@ -20,9 +21,10 @@ try {
   for (const item of (saved.marketListings || [])) marketListings.push(item);
   for (const item of (saved.marketHistory || [])) marketHistory.push(item);
   for (const round of (saved.playerGameRounds || [])) if (round && round.createdAt) playerGameRounds.push(round);
+  for (const item of (saved.referralWithdrawals || [])) if (item && item.id) referralWithdrawals.push(item);
 } catch {}
 function persistPlayerData() {
-  try { fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify({players:[...registeredPlayers.values()], transfers:playerTransfers.slice(0,1000), referredPlayerIds:[...referredPlayerIds], marketListings, marketHistory:marketHistory.slice(-300), playerGameRounds:playerGameRounds.slice(0,10000)})); } catch (e) { console.error('Could not persist player data:', e.message); }
+  try { fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify({players:[...registeredPlayers.values()], transfers:playerTransfers.slice(0,1000), referredPlayerIds:[...referredPlayerIds], marketListings, marketHistory:marketHistory.slice(-300), playerGameRounds:playerGameRounds.slice(0,10000), referralWithdrawals:referralWithdrawals.slice(0,5000)})); } catch (e) { console.error('Could not persist player data:', e.message); }
 }
 // One-time recovery for transfers created before pending recipient credits existed.
 // Older profile syncs could overwrite the recipient's server balance with stale browser data.
@@ -373,6 +375,48 @@ http.createServer(async (req, res) => {
       .map((p) => ({ name: p.name, username: p.username || "", photoUrl: p.photoUrl || "", telegramId: p.telegramId || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, balance: p.balance || 0, premiumActive: getPremiumUntil(p) > Date.now(), premiumUntil: getPremiumUntil(p) > Date.now() ? getPremiumUntil(p) : 0, registeredAt: p.registeredAt }));
     res.writeHead(200);
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
+  }
+
+  if (requestUrl.pathname === "/api/referrals/balance") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "GET") { res.writeHead(405, { Allow: "GET" }); return res.end(JSON.stringify({ error: "Method not allowed" })); }
+    const clientId = String(requestUrl.searchParams.get("clientId") || "");
+    const p = registeredPlayers.get(clientId);
+    if (!p) { res.writeHead(404); return res.end(JSON.stringify({ error: "Игрок не зарегистрирован" })); }
+    const earned = Math.max(0, Number(p.referrals) || 0) * 25;
+    const withdrawn = Math.max(0, Number(p.referralWithdrawn) || 0);
+    const available = Math.max(0, earned - withdrawn);
+    return res.end(JSON.stringify({ referrals: Math.max(0, Number(p.referrals) || 0), earned, withdrawn, available: Math.round(available * 100) / 100, minimum: 500 }));
+  }
+
+  if (requestUrl.pathname === "/api/referrals/withdraw") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "POST") { res.writeHead(405, { Allow: "POST" }); return res.end(JSON.stringify({ error: "Method not allowed" })); }
+    let body = "";
+    req.on("data", chunk => { body += chunk; if (body.length > 4096) req.destroy(); });
+    req.on("end", () => {
+      let input; try { input = JSON.parse(body || "{}"); } catch { res.writeHead(400); return res.end(JSON.stringify({ error: "Invalid JSON" })); }
+      const clientId = String(input.clientId || "");
+      const bank = String(input.bank || "").trim().slice(0, 80);
+      const details = String(input.details || "").trim().slice(0, 120);
+      const p = registeredPlayers.get(clientId);
+      if (!p) { res.writeHead(404); return res.end(JSON.stringify({ error: "Игрок не зарегистрирован" })); }
+      if (!bank || details.length < 5) { res.writeHead(400); return res.end(JSON.stringify({ error: "Укажи банк и корректные реквизиты" })); }
+      const earned = Math.max(0, Number(p.referrals) || 0) * 25;
+      const withdrawn = Math.max(0, Number(p.referralWithdrawn) || 0);
+      const available = Math.round(Math.max(0, earned - withdrawn) * 100) / 100;
+      if (available < 500) { res.writeHead(400); return res.end(JSON.stringify({ error: "Вывод доступен от 500 ₽" })); }
+      p.referralWithdrawn = Math.round((withdrawn + available) * 100) / 100;
+      const request = { id: "REF-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase(), clientId, username: p.username || p.name || "Игрок", telegramId: p.telegramId || "", amount: available, bank, details, status: "pending", createdAt: new Date().toISOString() };
+      referralWithdrawals.unshift(request);
+      if (referralWithdrawals.length > 5000) referralWithdrawals.length = 5000;
+      persistPlayerData();
+      res.writeHead(200);
+      return res.end(JSON.stringify({ success: true, request: { id: request.id, amount: request.amount, status: request.status, createdAt: request.createdAt }, referrals: Math.max(0, Number(p.referrals) || 0), available: 0 }));
+    });
+    return;
   }
 
   if (requestUrl.pathname === "/api/players/monthly-top") {
