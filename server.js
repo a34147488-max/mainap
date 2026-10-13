@@ -214,6 +214,7 @@ http.createServer(async (req, res) => {
         telegramId: telegramId || (previous ? previous.telegramId || "" : ""),
         photoUrl: safePhotoUrl || (previous ? previous.photoUrl || "" : ""),
         referrals: previous ? (previous.referrals || 0) : 0,
+        referralWithdrawn: previous ? Math.max(0, Number(previous.referralWithdrawn || 0)) : 0,
         balance: creditedBalance,
         pendingCredits: 0,
         totalWon: previous ? Math.max(previous.totalWon || 0, Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000)) : Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000),
