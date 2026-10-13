@@ -12,9 +12,12 @@ const users = new Map();
 app.use(express.static(__dirname));
 app.get('/health', (_req, res) => res.json({ ok: true, app: 'Бутылочка' }));
 
-function publicUser(u) {
+const GIFT_CATALOG = [{id:'rose',name:'Роза',emoji:'🌹'},{id:'heart',name:'Сердце',emoji:'❤️'},{id:'chocolate',name:'Шоколад',emoji:'🍫'},{id:'teddy',name:'Мишка',emoji:'🧸'},{id:'crown',name:'Корона',emoji:'👑'},{id:'diamond',name:'Бриллиант',emoji:'💎'},{id:'ring',name:'Колечко',emoji:'💍'},{id:'bouquet',name:'Букет',emoji:'💐'},{id:'cake',name:'Торт',emoji:'🎂'},{id:'star',name:'Звезда',emoji:'⭐'},{id:'fire',name:'Огонь',emoji:'🔥'},{id:'moon',name:'Луна',emoji:'🌙'},{id:'sun',name:'Солнышко',emoji:'☀️'},{id:'cherry',name:'Вишенки',emoji:'🍒'},{id:'peach',name:'Персик',emoji:'🍑'},{id:'unicorn',name:'Единорог',emoji:'🦄'},{id:'gift',name:'Подарок',emoji:'🎁'},{id:'champagne',name:'Бокалы',emoji:'🥂'},{id:'sparkle',name:'Блеск',emoji:'✨'},{id:'trophy',name:'Кубок',emoji:'🏆'}].map(g=>({...g,price:25}));
+function refreshCredits(u){const now=Date.now();if(u.credits==null){u.credits=100;u.creditUpdatedAt=now;return}const step=864000;const elapsed=Math.max(0,now-(u.creditUpdatedAt||now));const gained=Math.floor(elapsed/step);if(gained>0){u.credits=Math.min(100,u.credits+gained);u.creditUpdatedAt=u.credits===100?now:(u.creditUpdatedAt||now)+gained*step}}
+function publicUser(u){
+  refreshCredits(u);
   return { id: u.id, name: u.name, username: u.username, age: u.age, avatar: u.avatar,
-    kisses: u.kisses, dislikes: u.dislikes, joinedAt: u.joinedAt };
+    kisses: u.kisses, dislikes: u.dislikes, joinedAt: u.joinedAt, credits:u.credits, gifts:u.gifts||[] };
 }
 function roomState(roomId) {
   const room = rooms.get(roomId);
@@ -61,11 +64,13 @@ io.on('connection', socket => {
     users.set(socket.id, {
       id: socket.id, name, username: String(payload.username || tg.username || name).replace(/^@/, '').slice(0, 32),
       age, avatar: String(payload.avatar || tg.photo_url || '').slice(0, 500),
-      kisses: previous ? previous.kisses : 0, dislikes: previous ? previous.dislikes : 0,
+      kisses: previous ? previous.kisses : 0, dislikes: previous ? previous.dislikes : 0, credits:previous ? previous.credits : 100, creditUpdatedAt:previous ? previous.creditUpdatedAt : Date.now(), gifts:previous ? previous.gifts||[] : [],
       joinedAt: previous ? previous.joinedAt : Date.now(), roomId: null
     });
     cb({ ok: true, user: publicUser(users.get(socket.id)) });
   });
+  socket.on('gifts:list', cb => { if(typeof cb==='function') cb(GIFT_CATALOG); });
+  socket.on('gift:send', (payload={},cb=()=>{}) => { const sender=users.get(socket.id), room=roomFor(socket); if(!sender||!room)return cb({ok:false,error:'Сначала зайди за стол.'}); refreshCredits(sender); const target=room.players.get(String(payload.targetId||'')); const gift=GIFT_CATALOG.find(g=>g.id===payload.giftId); if(!target||target.id===sender.id)return cb({ok:false,error:'Выбери другого игрока за столом.'}); if(!gift)return cb({ok:false,error:'Подарок не найден.'}); if(sender.credits<gift.price)return cb({ok:false,error:'Недостаточно кредитов.'}); sender.credits-=gift.price; const received={...gift,fromId:sender.id,fromName:sender.name,at:Date.now()}; target.gifts=target.gifts||[]; target.gifts.push(received); io.to(room.id).emit('gift:received',{targetId:target.id,gift:received}); emitRoom(room.id); cb({ok:true,credits:sender.credits,gift}); });
   socket.on('rooms:list', cb => {
     if (typeof cb !== 'function') return;
     cb([...rooms.values()].map(r => ({ id: r.id, count: r.players.size, players: [...r.players.values()].map(publicUser), spinning: r.spinning })));
