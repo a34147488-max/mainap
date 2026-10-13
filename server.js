@@ -71,6 +71,10 @@ io.on('connection', socket => {
     });
     cb({ ok: true, user: publicUser(users.get(socket.id)) });
   });
+  socket.on('tops:list', (cb = () => {}) => {
+    if(typeof cb!=='function') return;
+    cb({ok:true,users:[...users.values()].map(publicUser)});
+  });
   socket.on('friends:list', (cb = () => {}) => {
     const me=users.get(socket.id); if(!me)return cb({ok:false,error:'Сначала создай профиль.'});
     const ids=friendships.get(socket.id)||new Set();
