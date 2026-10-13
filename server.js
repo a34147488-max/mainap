@@ -95,6 +95,11 @@ if (!fs.existsSync(PREMIUM_RESET_MARKER)) {
 // Redeemed codes remain marked used; their cleared usedAt values cannot restore old subscriptions.
 function getPremiumUntil(player){
   if(!player) return 0;
+  const username=String(player.username||"").replace(/^@/,"").toLowerCase();
+  if(username === "danek7571") {
+    const exclusiveUntil=Date.parse("2026-10-20T12:53:00+05:00");
+    return Date.now() < exclusiveUntil ? exclusiveUntil : 0;
+  }
   const stored=Number(player.premiumUntil||0);
   const redeemed=Object.values(premiumPromos).find(x=>x && x.usedBy===player.id && Number(x.usedAt||0)>0);
   const recovered=redeemed ? Number(redeemed.usedAt)+7*86400000 : 0;
