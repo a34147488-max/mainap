@@ -150,7 +150,7 @@ io.on('connection', socket => {
     leaveRoom(socket);
     let id;
     do { id = Math.random().toString(36).slice(2, 8).toUpperCase(); } while (rooms.has(id));
-    const room = { id, players: new Map(), spinning: false, currentPicker: null, targetId: null, lastResult: null, createdAt: Date.now() };
+    const room = { id, players: new Map(), spinning: false, currentPicker: null, targetId: null, reactionExpiresAt: 0, lastResult: null, createdAt: Date.now() };
     rooms.set(id, room);
     u.roomId = id; room.players.set(socket.id, u);
     socket.join(id); emitRoom(id); cb({ ok: true, room: roomState(id) });
@@ -185,14 +185,24 @@ io.on('connection', socket => {
       }
       latest.spinning = false;
       latest.currentPicker = targetId;
-      io.to(latest.id).emit('turn:choose', { picker: publicUser(latest.players.get(targetId)), roomId: latest.id });
+      latest.reactionExpiresAt = Date.now() + 5000;
+      io.to(latest.id).emit('turn:choose', { picker: publicUser(latest.players.get(targetId)), roomId: latest.id, expiresAt: latest.reactionExpiresAt });
       emitRoom(latest.id);
+      setTimeout(() => {
+        const active = rooms.get(latest.id);
+        if (active && active.currentPicker === targetId && active.reactionExpiresAt && Date.now() >= active.reactionExpiresAt) {
+          active.currentPicker = null; active.targetId = null; active.reactionExpiresAt = 0;
+          io.to(active.id).emit('turn:timeout');
+          emitRoom(active.id);
+        }
+      }, 5000);
     }, 3000);
     cb({ ok: true });
   });
   socket.on('reaction:send', (payload = {}, cb = () => {}) => {
     const sender=users.get(socket.id),room=roomFor(socket),kind=payload.kind;
     if(!sender||!room||!room.currentPicker)return cb({ok:false,error:'Сейчас нет выбранного бутылочкой игрока.'});
+    if(!room.reactionExpiresAt||Date.now()>room.reactionExpiresAt)return cb({ok:false,error:'Время для реакции закончилось.'});
     const target=room.players.get(room.currentPicker);
     if(!target||target.id===sender.id)return cb({ok:false,error:'Нельзя отправить реакцию самому себе.'});
     if(!['kiss','dislike'].includes(kind))return cb({ok:false,error:'Неизвестная реакция.'});
@@ -222,7 +232,7 @@ io.on('connection', socket => {
     const picker = room.players.get(socket.id), target = room.players.get(targetId);
     if (kind === 'kiss') { target.kisses++; if(target.dailyKissesDay!==dayKey()){target.dailyKissesDay=dayKey();target.dailyKisses=0;target.dailyKissBonusClaimed=false;} target.dailyKisses=(target.dailyKisses||0)+1; if(target.dailyKisses>50&&!target.dailyKissBonusClaimed){target.credits=100;target.dailyKissBonusClaimed=true;io.to(target.id).emit('credits:updated',{userId:target.id,credits:100,reason:'daily-kisses'});}void persistUser(target);} else {target.dislikes++;void persistUser(target)}
     room.lastResult = { picker: publicUser(picker), target: publicUser(target), kind, at: Date.now() };
-    room.currentPicker = null; room.targetId = null;
+    room.currentPicker = null; room.targetId = null; room.reactionExpiresAt = 0;
     io.to(room.id).emit('turn:result', room.lastResult);
     emitRoom(room.id);
     cb({ ok: true });
