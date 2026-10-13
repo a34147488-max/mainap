@@ -38,11 +38,28 @@ if (recoveredTransferCredits) persistPlayerData();
 const START1_FILE = path.join(root, '.start1-activations.json');
 let savedStart1Users=[];try{savedStart1Users=JSON.parse(fs.readFileSync(START1_FILE,'utf8'))}catch{}
 const start1Users = new Set(Array.isArray(savedStart1Users)?savedStart1Users:[]);
-const PREMIUM_FILE = path.join(root, '.premium-promos.json');
+// Store promo redemptions on Railway's persistent Volume when one is mounted.
+const PREMIUM_DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.VKCOIN_DATA_DIR || root;
+const PREMIUM_FILE = path.join(PREMIUM_DATA_DIR, '.premium-promos.json');
+const LEGACY_PREMIUM_FILE = path.join(root, '.premium-promos.json');
 const PREMIUM_CODES = ['VKC-PREM-7D-A7K2','VKC-PREM-7D-M4Q9','VKC-PREM-7D-R8T3','VKC-PREM-7D-C6W1','VKC-PREM-7D-P2N5','VKC-PREM-7D-H9D4','VKC-PREM-7D-X3B7','VKC-PREM-7D-F5L8','VKC-PREM-7D-J1S6','VKC-PREM-7D-Z7G2'];
 const PREMIUM_CODES_NEW = ["VKC-PREM-7D-Q8M2","VKC-PREM-7D-B4T9","VKC-PREM-7D-L6R3","VKC-PREM-7D-W2K7","VKC-PREM-7D-D9F5","VKC-PREM-7D-Y3H8","VKC-PREM-7D-C7N4","VKC-PREM-7D-G5P1","VKC-PREM-7D-T8V6","VKC-PREM-7D-Z4X2"];
 let premiumPromos = {};
-try { premiumPromos = JSON.parse(fs.readFileSync(PREMIUM_FILE, 'utf8')); } catch {}
+try {
+  premiumPromos = JSON.parse(fs.readFileSync(PREMIUM_FILE, 'utf8'));
+} catch {
+  // Migrate the old local file if it is still present when the Volume is mounted.
+  if (PREMIUM_FILE !== LEGACY_PREMIUM_FILE) {
+    try {
+      premiumPromos = JSON.parse(fs.readFileSync(LEGACY_PREMIUM_FILE, 'utf8'));
+      fs.mkdirSync(PREMIUM_DATA_DIR, { recursive: true });
+      fs.writeFileSync(PREMIUM_FILE, JSON.stringify(premiumPromos, null, 2));
+    } catch {}
+  }
+}
+if (!process.env.RAILWAY_VOLUME_MOUNT_PATH && !process.env.VKCOIN_DATA_DIR) {
+  console.warn('PREMIUM promo redemptions are using local app storage; configure a persistent Railway Volume or VKCOIN_DATA_DIR to keep one-use limits across restarts.');
+}
 for (const code of PREMIUM_CODES) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 for (const code of PREMIUM_CODES_NEW) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 function savePremiumPromos(){ fs.writeFileSync(PREMIUM_FILE, JSON.stringify(premiumPromos, null, 2)); }
