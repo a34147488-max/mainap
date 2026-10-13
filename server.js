@@ -125,7 +125,7 @@ http.createServer(async (req, res) => {
       if (!/^[a-zA-Z0-9_-]{12,80}$/.test(clientId) || !Number.isFinite(balance) || balance < 0 || balance > 1e15) {
         res.writeHead(400); return res.end(JSON.stringify({ error: "Invalid player data" }));
       }
-      if (username && !/^[a-z0-9_]{3,20}$/.test(username)) { res.writeHead(400); return res.end(JSON.stringify({ error: "Username: 3–20 символов, латиница, цифры и _." })); }
+      if (username && !/^[a-z0-9_]{5,32}$/.test(username)) { res.writeHead(400); return res.end(JSON.stringify({ error: "Telegram username: 5–32 символа, латиница, цифры и _." })); }
       const collision = username && [...registeredPlayers.values()].find(p => p.username === username && p.id !== clientId);
       if (collision) { res.writeHead(409); return res.end(JSON.stringify({ error: "Этот username уже занят." })); }
       const previous = registeredPlayers.get(clientId);
