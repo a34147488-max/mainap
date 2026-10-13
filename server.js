@@ -52,7 +52,7 @@ let rouletteRoundSequence=1;
 let currentRouletteRound={id:rouletteRoundSequence,startedAt:0,endsAt:0,status:'open',result:null,bets:[],multipliers:makeRouletteMultipliers()};
 const gamePresence=new Map();
 const GAME_TYPES=['ladder','nvuti','crash','olympus','bandit','wheel','flip','dice','cups','mines','csgo'];
-setInterval(()=>{const now=Date.now();if(currentRouletteRound.status==='open'&&currentRouletteRound.endsAt>0&&now>=currentRouletteRound.endsAt){currentRouletteRound.status='resolved';currentRouletteRound.result=Math.floor(Math.random()*37);currentRouletteRound.resolvedAt=now}else if(currentRouletteRound.status==='resolved'&&now-currentRouletteRound.resolvedAt>=5000){rouletteRoundSequence++;currentRouletteRound={id:rouletteRoundSequence,startedAt:0,endsAt:0,status:'open',result:null,bets:[],multipliers:makeRouletteMultipliers()}}for(const [type,players] of gamePresence){for(const [id,seen] of players){if(now-seen>45000)players.delete(id)}if(!players.size)gamePresence.delete(type)}},250);
+setInterval(()=>{const now=Date.now();if(currentRouletteRound.status==='open'&&currentRouletteRound.endsAt>0&&now>=currentRouletteRound.endsAt){currentRouletteRound.status='resolved';currentRouletteRound.result=Math.floor(Math.random()*37);currentRouletteRound.resolvedAt=now}else if(currentRouletteRound.status==='resolved'&&now-currentRouletteRound.resolvedAt>=12000){rouletteRoundSequence++;currentRouletteRound={id:rouletteRoundSequence,startedAt:0,endsAt:0,status:'open',result:null,bets:[],multipliers:makeRouletteMultipliers()}}for(const [type,players] of gamePresence){for(const [id,seen] of players){if(now-seen>45000)players.delete(id)}if(!players.size)gamePresence.delete(type)}},250);
 const ONLINE_TTL_MS = 60_000;
 
 const mime = {
