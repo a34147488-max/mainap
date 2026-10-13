@@ -177,6 +177,26 @@ html{scroll-behavior:smooth}
 @keyframes vkDot{to{opacity:.25;transform:translateY(-4px)}}
 @media(prefers-reduced-motion:reduce){.vk-content-enter,.overlay.open .sheet,.vk-more-item,.vk-loader-coin,.vk-loader-dots i,.vk-nav-btn.active .vk-nav-icon{animation:none!important}html{scroll-behavior:auto}}
 
+
+/* Large blue Bytecoin-inspired tap coin, partially peeking from the bottom */
+.vkcoin-tap{
+ position:fixed!important;z-index:3!important;left:50%!important;bottom:-112px!important;
+ transform:translateX(-50%)!important;width:min(88vw,330px)!important;height:min(88vw,330px)!important;
+ margin:0!important;padding:0!important;border-radius:50%!important;overflow:hidden!important;
+ border:5px solid #8bd5ff!important;
+ background:radial-gradient(circle at 35% 15%,#4bb8ff 0%,#1679d8 42%,#06418f 73%,#031d52 100%)!important;
+ box-shadow:0 -5px 0 #bce8ff,inset 0 5px 18px #ffffff55,inset 0 -22px 32px #001b54aa,0 0 35px #168cff77!important;
+}
+.vkcoin-tap:before{content:"";position:absolute;inset:12px;border-radius:50%;border:2px solid #b9eaffaa;box-shadow:inset 0 0 0 5px #0b5bb866;pointer-events:none}
+.vkcoin-aura{width:95%!important;height:95%!important;top:2%!important;background:#6bd0ff55!important;filter:blur(25px)!important}
+.vkcoin-coin{width:83%!important;max-width:none!important;flex:none!important;filter:hue-rotate(155deg) saturate(1.3) drop-shadow(0 10px 12px #001d4caa)!important;transform:translateY(-12px)!important}
+.vkcoin-tap:active .vkcoin-coin{transform:translateY(-12px) scale(.94) rotate(-4deg)!important}
+.vkcoin-tap.coin-hit .vkcoin-coin{animation:vkcTapBlue .38s cubic-bezier(.2,.8,.3,1)!important}
+.vkcoin-tap-label,.vkcoin-tap-reward{display:none!important}
+@keyframes vkcTapBlue{0%{transform:translateY(-12px) scale(1) rotate(0)}35%{transform:translateY(-12px) scale(.91) rotate(-7deg)}72%{transform:translateY(-12px) scale(1.045) rotate(3deg)}100%{transform:translateY(-12px) scale(1) rotate(0)}}
+@media(max-width:380px){.vkcoin-tap{width:300px!important;height:300px!important;bottom:-105px!important}.vkcoin-coin{width:82%!important}}
+@media(min-width:600px){.vkcoin-tap{bottom:-112px!important}}
+
 </style></head><body><div class="vk-loading-line" id="vkLoadingLine"></div><div class="vk-startup-loader" id="vkStartupLoader" aria-label="Загрузка VK COIN"><div class="vk-loader-coin">V</div><div class="vk-loader-caption">VK COIN</div><div class="vk-loader-dots"><i></i><i></i><i></i></div></div><div id="subscribeGate" class="subscribe-gate"><div class="subscribe-card"><div class="subscribe-emblem">VK</div><div class="eyebrow">СООБЩЕСТВО VK COIN</div><h2>Подпишись на канал</h2><p>Новости проекта, обновления и новые игровые режимы.</p><a class="subscribe-link" href="https://t.me/vkcoinnew" target="_blank" rel="noopener noreferrer">Открыть канал ↗</a><button class="secondary" onclick="closeSubscribeGate()">Продолжить в приложение</button></div></div><div class="float f1">$</div><div class="float f2">VK</div><div class="float f3">VC</div>
 <main><div id="premiumBanner" class="premium-banner" style="display:none"></div><header class="top"><div><div class="brand">◈ VK COIN</div><div class="sub">DIGITAL COIN EXCHANGE</div></div><div class="online">● Онлайн</div></header>
 <section class="live-wins glass" aria-label="Последние выигрыши"><div class="live-wins-head"><span class="live-wins-dot"></span><b>ПОСЛЕДНИЕ ВЫИГРЫШИ</b><span class="live-wins-live">LIVE</span></div><div id="liveWinsViewport" class="live-wins-viewport"><div id="liveWinsTrack" class="live-wins-track"><div class="live-win-empty">Загружаем последние выигрыши…</div></div></div></section><section class="hero glass"><div class="eyebrow">БЫСТРЫЙ ОБМЕН</div><h1>VK COIN<br><span>Обновление 2.0 вышло</span></h1><p>Попробуй новые режимы и рынок.</p></section>
