@@ -28,6 +28,8 @@ let savedStart1Users=[];try{savedStart1Users=JSON.parse(fs.readFileSync(START1_F
 const start1Users = new Set(Array.isArray(savedStart1Users)?savedStart1Users:[]);
 const PREMIUM_FILE = path.join(root, '.premium-promos.json');
 const PREMIUM_CODES = ['VKC-PREM-7D-A7K2','VKC-PREM-7D-M4Q9','VKC-PREM-7D-R8T3','VKC-PREM-7D-C6W1','VKC-PREM-7D-P2N5','VKC-PREM-7D-H9D4','VKC-PREM-7D-X3B7','VKC-PREM-7D-F5L8','VKC-PREM-7D-J1S6','VKC-PREM-7D-Z7G2'];
+const PREMIUM_CODES_NEW = ["VKC-PREM-7D-Q8M2","VKC-PREM-7D-B4T9","VKC-PREM-7D-L6R3","VKC-PREM-7D-W2K7","VKC-PREM-7D-D9F5","VKC-PREM-7D-Y3H8","VKC-PREM-7D-C7N4","VKC-PREM-7D-G5P1","VKC-PREM-7D-T8V6","VKC-PREM-7D-Z4X2"];
+for (const code of PREMIUM_CODES_NEW) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 let premiumPromos = {};
 try { premiumPromos = JSON.parse(fs.readFileSync(PREMIUM_FILE, 'utf8')); } catch {}
 for (const code of PREMIUM_CODES) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
@@ -272,7 +274,7 @@ http.createServer(async (req, res) => {
     const players = allPlayers
       .sort((a, b) => rankMode === "referrals" ? (b.referrals || 0) - (a.referrals || 0) : rankMode === "balance" ? (b.balance || 0) - (a.balance || 0) || a.registeredAt.localeCompare(b.registeredAt) : (b.totalWon || 0) - (a.totalWon || 0) || a.registeredAt.localeCompare(b.registeredAt))
       .slice(0, 100)
-      .map((p) => ({ name: p.name, username: p.username || "", photoUrl: p.photoUrl || "", telegramId: p.telegramId || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, balance: p.balance || 0, registeredAt: p.registeredAt }));
+      .map((p) => ({ name: p.name, username: p.username || "", photoUrl: p.photoUrl || "", telegramId: p.telegramId || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, balance: p.balance || 0, premiumActive: Number(p.premiumUntil || 0) > Date.now(), premiumUntil: Number(p.premiumUntil || 0) > Date.now() ? Number(p.premiumUntil) : 0, registeredAt: p.registeredAt }));
     res.writeHead(200);
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
   }
@@ -341,9 +343,10 @@ http.createServer(async (req, res) => {
     const now=Date.now(), until=Number(p.premiumUntil||0), active=until>now;
     if(active){
       const last=Number(p.autoClickLastAt||p.premiumStartedAt||now), elapsed=Math.max(0,Math.min(now,until)-last);
-      const earned=Math.min(75000,Number(p.autoClickEarned||0)+elapsed*(75000/(7*86400000)));
+      const previousEarned=Number(p.autoClickEarned||0);
+      const earned=Math.min(75000,previousEarned+elapsed*(75000/(7*86400000)));
       p.autoClickEarned=earned;p.autoClickLastAt=Math.min(now,until);
-      if(earned>Number(p.autoClickEarnedSaved||0)){p.autoClickEarnedSaved=earned;persistPlayerData();}
+      if(earned>previousEarned+0.000001)persistPlayerData();
     }
     return res.end(JSON.stringify({active,until:active?until:0,daysLeft:active?Math.ceil((until-now)/86400000):0,autoClickEarned:Number(p.autoClickEarned||0),autoClickCap:75000,clickMultiplier:active?5:1}));
   }
