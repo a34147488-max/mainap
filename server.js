@@ -34,6 +34,15 @@ try { premiumPromos = JSON.parse(fs.readFileSync(PREMIUM_FILE, 'utf8')); } catch
 for (const code of PREMIUM_CODES) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 for (const code of PREMIUM_CODES_NEW) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 function savePremiumPromos(){ fs.writeFileSync(PREMIUM_FILE, JSON.stringify(premiumPromos, null, 2)); }
+// Always derive the premium expiry from the redeemed promo record as a fallback.
+// This prevents a normal player profile sync from hiding an actually activated PREMIUM.
+function getPremiumUntil(player){
+  if(!player) return 0;
+  const stored=Number(player.premiumUntil||0);
+  const redeemed=Object.values(premiumPromos).find(x=>x && x.usedBy===player.id && Number(x.usedAt||0)>0);
+  const recovered=redeemed ? Number(redeemed.usedAt)+7*86400000 : 0;
+  return Math.max(stored,recovered);
+}
 const OBnova_FILE = path.join(root, '.obnova-activations.json');
 let savedObnovaUsers=[];try{savedObnovaUsers=JSON.parse(fs.readFileSync(OBnova_FILE,'utf8'))}catch{}
 const obnovaUsers = new Set(Array.isArray(savedObnovaUsers)?savedObnovaUsers:[]);
@@ -282,7 +291,7 @@ http.createServer(async (req, res) => {
     const players = allPlayers
       .sort((a, b) => rankMode === "referrals" ? (b.referrals || 0) - (a.referrals || 0) : rankMode === "balance" ? (b.balance || 0) - (a.balance || 0) || a.registeredAt.localeCompare(b.registeredAt) : (b.totalWon || 0) - (a.totalWon || 0) || a.registeredAt.localeCompare(b.registeredAt))
       .slice(0, 100)
-      .map((p) => ({ name: p.name, username: p.username || "", photoUrl: p.photoUrl || "", telegramId: p.telegramId || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, balance: p.balance || 0, premiumActive: Number(p.premiumUntil || 0) > Date.now(), premiumUntil: Number(p.premiumUntil || 0) > Date.now() ? Number(p.premiumUntil) : 0, registeredAt: p.registeredAt }));
+      .map((p) => ({ name: p.name, username: p.username || "", photoUrl: p.photoUrl || "", telegramId: p.telegramId || "", referrals: p.referrals || 0, totalWon: p.totalWon || 0, balance: p.balance || 0, premiumActive: getPremiumUntil(p) > Date.now(), premiumUntil: getPremiumUntil(p) > Date.now() ? getPremiumUntil(p) : 0, registeredAt: p.registeredAt }));
     res.writeHead(200);
     return res.end(JSON.stringify({ players, count: registeredPlayers.size }));
   }
@@ -348,7 +357,7 @@ http.createServer(async (req, res) => {
     const clientId=String(requestUrl.searchParams.get("clientId")||"");
     const p=registeredPlayers.get(clientId);
     if(!p){res.writeHead(404);return res.end(JSON.stringify({error:"Игрок не зарегистрирован"}))}
-    const now=Date.now(), until=Number(p.premiumUntil||0), active=until>now;
+    const now=Date.now(), until=getPremiumUntil(p), active=until>now;
     if(active){
       const last=Number(p.autoClickLastAt||p.premiumStartedAt||now), elapsed=Math.max(0,Math.min(now,until)-last);
       const previousEarned=Number(p.autoClickEarned||0);
