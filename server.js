@@ -93,14 +93,6 @@ io.on('connection', socket => {
     else {const age=Number(value);if(!Number.isInteger(age)||age<13||age>99)return cb({ok:false,error:'Возраст должен быть от 13 до 99 лет.'});u.age=age;}
     u.credits-=25;await persistUser(u);cb({ok:true,user:publicUser(u)});
   });
-  socket.on('bonus:channel:claim',async (_payload={},cb=()=>{})=>{
-    const u=users.get(socket.id);if(!u)return cb({ok:false,error:'Сначала создай профиль.'});
-    if(!u.telegramId)return cb({ok:false,error:'Открой игру внутри Telegram, чтобы проверить подписку.'});
-    await dbReady;
-    if(u.subscriptionBonusClaimed||channelBonusClaims.has(u.telegramId))return cb({ok:false,message:'Бонус за подписку уже получен. Повторно получить его нельзя.'});
-    if(!process.env.TELEGRAM_BOT_TOKEN)return cb({ok:false,message:'Проверка подписки пока не настроена. Администратору нужно добавить TELEGRAM_BOT_TOKEN в Railway и дать боту права администратора канала.'});
-    try{const response=await fetch('https://api.telegram.org/bot'+process.env.TELEGRAM_BOT_TOKEN+'/getChatMember?chat_id=@vkcoinnew&user_id='+encodeURIComponent(u.telegramId));const data=await response.json();if(!data.ok)return cb({ok:false,error:'Telegram не смог проверить подписку. Проверь права бота в канале.'});const status=data.result&&data.result.status;if(!['member','administrator','creator'].includes(status))return cb({ok:false,message:'Подписка не найдена. Подпишись на @vkcoinnew и попробуй снова.'});u.credits=Math.min(100,u.credits+50);u.subscriptionBonusClaimed=true;channelBonusClaims.add(u.telegramId);await persistUser(u);cb({ok:true,credits:u.credits,message:'Подписка подтверждена! Начислено 50 кредитов.'});}catch(e){cb({ok:false,error:'Не удалось проверить подписку. Попробуй позже.'})}
-  });
   socket.on('tops:list', async (cb = () => {}) => {
     if(typeof cb!=='function') return;
     try {
