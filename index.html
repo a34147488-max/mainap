@@ -204,6 +204,70 @@ html{scroll-behavior:smooth}
 .wallet-panel:after{content:"";position:absolute;right:18px;top:14px;font-size:9px;font-weight:900;letter-spacing:1.5px;color:#75e7ff;opacity:.9;pointer-events:none}
 .wallet-panel .wallet-update-label{position:relative;z-index:1;color:#75e7ff!important;font-size:10px!important;font-weight:900!important;letter-spacing:2px!important;text-shadow:0 0 12px #00aaff77;padding:2px 0 8px}
 .wallet-panel .wallet-balance{position:relative;z-index:1;text-shadow:0 0 18px #159dff55;margin:8px 0 14px;font-size:clamp(26px,7vw,38px);font-weight:900;overflow-wrap:anywhere}.wallet-panel #clickSummary{position:relative;z-index:1;margin-bottom:8px}
+
+/* VK COIN — светлый интерфейс Telegram Mini App по референсам */
+:root{color-scheme:light!important;--vk-blue:#3987e8;--vk-ink:#1c395f;--vk-muted:#7890b0;--vk-line:#dce8f7;--vk-bg:#f2f7fd}
+html,body{background:#f2f7fd!important;color:var(--vk-ink)!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif!important}
+body{background:linear-gradient(180deg,#f8fbff 0%,#eaf3fd 58%,#f8fbff 100%)!important}
+main{width:100%!important;max-width:820px!important;margin:0 auto!important;padding:20px 16px 40px!important;overflow:hidden!important}
+.top{display:flex!important;align-items:center!important;justify-content:space-between!important;padding:14px 4px 22px!important;background:transparent!important;border:0!important;box-shadow:none!important}
+.brand{color:#1d3d67!important;font-size:26px!important;font-weight:850!important;letter-spacing:-1px!important}
+.sub{color:#8da2bf!important;letter-spacing:3px!important;font-size:11px!important;font-weight:800!important}
+.online{background:#e2f6ee!important;color:#36a982!important;border:1px solid #ccefe2!important;border-radius:30px!important;padding:9px 13px!important;font-size:12px!important;font-weight:800!important}
+.glass,.hero,.live-wins,.rate,.action,.game-card,.calc,.wallet-panel{background:rgba(255,255,255,.88)!important;color:var(--vk-ink)!important;border:1px solid var(--vk-line)!important;border-radius:26px!important;box-shadow:0 8px 28px #315c8b0a!important;backdrop-filter:blur(12px)!important}
+.live-wins{padding:16px!important;margin:4px 0 18px!important}
+.live-wins-head,.live-wins-head b{color:#6f8caf!important;font-size:11px!important;letter-spacing:1.8px!important}
+.live-wins-live{color:#3987e8!important;background:#e8f2ff!important;border-radius:20px!important;padding:4px 8px!important}
+.hero{padding:24px 22px!important;margin:0 0 18px!important;background:linear-gradient(145deg,#fff,#f1f7ff)!important}
+.eyebrow{color:#428df0!important;font-size:11px!important;font-weight:900!important;letter-spacing:2.5px!important}
+.hero h1{color:#1d3b63!important;font-size:clamp(30px,7vw,43px)!important;line-height:1.08!important;letter-spacing:-1.8px!important}
+.hero h1 span{color:#3987e8!important}
+.hero p,.muted,.section>span,.rate .muted{color:#879dbb!important}
+.rates{display:grid!important;grid-template-columns:1fr!important;gap:12px!important;margin:0 0 20px!important}
+.rate{padding:18px!important}
+.rate .price{color:#2f80df!important;font-size:27px!important;font-weight:900!important}
+.section{display:flex!important;align-items:center!important;justify-content:space-between!important;margin:25px 2px 13px!important}
+.section h2{font-size:22px!important;color:#1d3b63!important;letter-spacing:-.7px!important}
+.section>span{font-size:12px!important;font-weight:700!important}
+.actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;margin:0 0 18px!important}
+.action{min-height:118px!important;padding:18px!important;text-align:left!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:7px!important}
+.action .symbol{color:#3987e8!important;background:#eaf3ff!important;border-radius:15px!important;width:42px!important;height:42px!important;display:grid!important;place-items:center!important;font-size:22px!important}
+.action b{color:#31577f!important;font-size:16px!important}
+.action small{color:#8ba0bc!important;font-size:11px!important}
+.action.buy{background:linear-gradient(145deg,#fff,#f0f6ff)!important}
+.primary,.subscribe-link{background:linear-gradient(135deg,#60a4f3,#2876d9)!important;color:#fff!important;border:0!important;border-radius:16px!important;box-shadow:0 8px 18px #3987e825!important}
+.secondary,.mini-btn{background:#edf5ff!important;color:#397fc9!important;border:1px solid #d7e7fa!important;border-radius:14px!important}
+.games-grid{gap:12px!important}
+.game-card{padding:16px!important}
+.game-card h3{color:#244568!important}
+.game-card p,.game-card small{color:#8198b6!important}
+.vkcoin-tap{
+ position:relative!important;inset:auto!important;left:auto!important;bottom:auto!important;transform:none!important;
+ display:flex!important;width:100%!important;height:auto!important;min-height:390px!important;aspect-ratio:auto!important;
+ margin:12px 0 18px!important;padding:22px 14px!important;border-radius:28px!important;overflow:hidden!important;
+ border:1px solid #dce8f7!important;background:linear-gradient(145deg,#fff,#f7fbff)!important;color:#fff!important;
+ box-shadow:0 8px 26px #315c8b0b!important
+}
+.vkcoin-tap:before{content:none!important}
+.vkcoin-aura{width:260px!important;height:260px!important;top:45px!important;background:#5ca7ff28!important;filter:blur(36px)!important}
+.vkcoin-coin{width:min(68vw,300px)!important;max-width:300px!important;filter:hue-rotate(155deg) saturate(1.2) drop-shadow(0 18px 24px #2b7be633)!important;transform:none!important}
+.vkcoin-tap:active .vkcoin-coin{transform:scale(.96)!important}
+.vkcoin-tap-label{display:block!important;color:#3987e8!important;font-size:12px!important;letter-spacing:2px!important;margin-top:10px!important}
+.vkcoin-tap-reward{display:block!important;color:#8199b8!important;font-size:14px!important}
+footer.footer{color:#8198b6!important}
+.overlay{background:#12253b66!important;backdrop-filter:blur(8px)!important}
+.sheet{background:#f8fbff!important;color:#244568!important;border:1px solid #dce8f7!important;border-radius:28px 28px 0 0!important}
+.sheet h2,.sheet label{color:#244568!important}
+.sheet p,.sheet .note{color:#8198b6!important}
+.sheet input,.sheet select,.sheet textarea{background:#fff!important;color:#244568!important;border:1px solid #d6e4f5!important;border-radius:15px!important}
+.vk-startup-loader{background:linear-gradient(160deg,#f8fbff,#eaf3fd 75%)!important}
+.vk-loader-coin{background:linear-gradient(145deg,#5ca5f3,#2675d9)!important;color:#fff!important;border:3px solid #b9d9ff!important;box-shadow:0 7px 0 #2465b3,0 12px 24px #3987e833!important}
+.vk-loader-caption{color:#6e8db3!important}
+.vk-loader-dots i{background:#3987e8!important}
+.float{opacity:.08!important;color:#3987e8!important}
+@media(max-width:420px){main{padding:14px 14px 34px!important}.top{padding-top:8px!important}.hero{padding:21px 18px!important}.actions{gap:10px!important}.action{padding:14px!important;min-height:112px!important}.vkcoin-tap{min-height:365px!important}.vkcoin-coin{width:min(72vw,285px)!important}.section h2{font-size:20px!important}}
+@media(min-width:600px){main{padding:26px 22px 46px!important}.actions{grid-template-columns:repeat(4,minmax(0,1fr))!important}.action{min-height:145px!important}}
+
 </style></head><body><div class="vk-loading-line" id="vkLoadingLine"></div><div class="vk-startup-loader" id="vkStartupLoader" aria-label="Загрузка VK COIN"><div class="vk-loader-coin">V</div><div class="vk-loader-caption">VK COIN</div><div class="vk-loader-dots"><i></i><i></i><i></i></div></div><div id="subscribeGate" class="subscribe-gate"><div class="subscribe-card"><div class="subscribe-emblem">VK</div><div class="eyebrow">СООБЩЕСТВО VK COIN</div><h2>Подпишись на канал</h2><p>Новости проекта, обновления и новые игровые режимы.</p><a class="subscribe-link" href="https://t.me/vkcoinnew" target="_blank" rel="noopener noreferrer">Открыть канал ↗</a><button class="secondary" onclick="closeSubscribeGate()">Продолжить в приложение</button></div></div><div class="float f1">$</div><div class="float f2">VK</div><div class="float f3">VC</div>
 <main><div id="premiumBanner" class="premium-banner" style="display:none"></div><header class="top"><div><div class="brand">◈ VK COIN</div><div class="sub">DIGITAL COIN EXCHANGE</div></div><div class="online">● Онлайн</div></header>
 <section class="live-wins glass" aria-label="Последние выигрыши"><div class="live-wins-head"><span class="live-wins-dot"></span><b>ПОСЛЕДНИЕ ВЫИГРЫШИ</b><span class="live-wins-live">LIVE</span></div><div id="liveWinsViewport" class="live-wins-viewport"><div id="liveWinsTrack" class="live-wins-track"><div class="live-win-empty">Загружаем последние выигрыши…</div></div></div></section><section class="hero glass"><div class="eyebrow">БЫСТРЫЙ ОБМЕН</div><h1>VK COIN<br><span>Обновление 2.0 вышло</span></h1><p>Попробуй новые режимы и рынок.</p></section>
