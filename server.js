@@ -200,18 +200,21 @@ http.createServer(async (req, res) => {
       let input;
       try { input = JSON.parse(body || "{}"); } catch { res.writeHead(400); return res.end(JSON.stringify({error:"Invalid JSON"})); }
       const senderId=String(input.clientId||""), recipientUsername=String(input.recipientUsername||"").trim().replace(/^@/,"").toLowerCase(), amount=Number(input.amount);
-      if(!/^[a-zA-Z0-9_-]{12,80}$/.test(senderId)||!/^[a-z0-9_]{3,20}$/.test(recipientUsername)||!Number.isFinite(amount)||amount<=0||Math.round(amount*1000)!==amount*1000) {
-        res.writeHead(400); return res.end(JSON.stringify({error:"Проверь получателя и сумму перевода."}));
+      if(!/^[a-zA-Z0-9_-]{12,80}$/.test(senderId)||!/^[a-z0-9_]{5,32}$/.test(recipientUsername)||!Number.isFinite(amount)||amount<=0||Math.round(amount*1000)!==amount*1000) {
+        res.writeHead(400); return res.end(JSON.stringify({error:"Проверь Telegram username и сумму перевода."}));
       }
-      const sender=registeredPlayers.get(senderId), recipient=[...registeredPlayers.values()].find(p => (p.username || "").toLowerCase() === recipientUsername);
-      if(!sender||!recipient){res.writeHead(404);return res.end(JSON.stringify({error:"Отправитель или получатель не зарегистрирован."}));}
-      if(sender.balance<amount){res.writeHead(400);return res.end(JSON.stringify({error:"Недостаточно средств на серверном балансе."}));}
+      const sender=registeredPlayers.get(senderId);
+      const recipient=[...registeredPlayers.values()].find(p => String(p.username||"").toLowerCase() === recipientUsername);
+      if(!sender){res.writeHead(404);return res.end(JSON.stringify({error:"Не удалось найти твой профиль. Перезапусти VK COIN в Telegram и попробуй ещё раз."}));}
+      if(!recipient){res.writeHead(404);return res.end(JSON.stringify({error:"Пользователь @"+recipientUsername+" не найден в VK COIN. Попроси его открыть приложение в Telegram хотя бы один раз."}));}
+      if(recipient.id===sender.id){res.writeHead(400);return res.end(JSON.stringify({error:"Нельзя перевести монеты самому себе."}));}
+      if(sender.balance<amount){res.writeHead(400);return res.end(JSON.stringify({error:"На серверном балансе недостаточно VKC. Обнови приложение и попробуй снова."}));}
       sender.balance=Math.round((sender.balance-amount)*1000)/1000;
       recipient.balance=Math.round((recipient.balance+amount)*1000)/1000;
-      const entry={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),senderId,recipientId,amount,createdAt:new Date().toISOString(),senderName:sender.name,recipientName:recipient.name};
+      const entry={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),senderId,recipientId:recipient.id,amount,createdAt:new Date().toISOString(),senderName:sender.name,recipientName:recipient.name};
       playerTransfers.unshift(entry); if(playerTransfers.length>1000)playerTransfers.length=1000;
       persistPlayerData();
-      res.writeHead(200); return res.end(JSON.stringify({success:true,amount,recipient:{name:recipient.name,balance:recipient.balance},sender:{balance:sender.balance}}));
+      res.writeHead(200); return res.end(JSON.stringify({success:true,amount,recipient:{name:recipient.name,username:recipient.username||"",balance:recipient.balance},sender:{balance:sender.balance}}));
     });
     return;
   }
