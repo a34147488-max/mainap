@@ -99,21 +99,21 @@ io.on('connection', socket => {
     if (!u || !room) return cb({ ok: false, error: 'Сначала зайди за стол.' });
     if (room.spinning || room.currentPicker) return cb({ ok: false, error: 'Сначала заверши текущий ход.' });
     if (room.players.size < 2) return cb({ ok: false, error: 'Нужно хотя бы два игрока.' });
-    room.spinning = true; room.lastResult = null; emitRoom(room.id);
     const players = [...room.players.keys()].filter(id => id !== socket.id);
     const targetId = players[Math.floor(Math.random() * players.length)];
+    room.spinning = true; room.lastResult = null; room.targetId = targetId; emitRoom(room.id);
     setTimeout(() => {
       const latest = rooms.get(room.id);
-      if (!latest || !latest.players.has(socket.id) || !latest.players.has(targetId)) {
-        if (latest) { latest.spinning = false; emitRoom(latest.id); }
+      if (!latest) return;
+      if (!latest.players.has(socket.id) || !latest.players.has(targetId)) {
+        latest.spinning = false; latest.targetId = null; emitRoom(latest.id);
         return;
       }
       latest.spinning = false;
       latest.currentPicker = targetId;
-      latest.targetId = targetId;
       io.to(targetId).emit('turn:choose', { picker: publicUser(latest.players.get(targetId)), roomId: latest.id });
       emitRoom(latest.id);
-    }, 3500);
+    }, 3000);
     cb({ ok: true });
   });
   socket.on('turn:vote', (payload = {}, cb = () => {}) => {
