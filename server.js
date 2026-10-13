@@ -48,8 +48,10 @@ let savedObnovaUsers=[];try{savedObnovaUsers=JSON.parse(fs.readFileSync(OBnova_F
 const obnovaUsers = new Set(Array.isArray(savedObnovaUsers)?savedObnovaUsers:[]);
 
 let rouletteRoundSequence=1;
-let currentRouletteRound={id:rouletteRoundSequence,startedAt:Date.now(),endsAt:Date.now()+25000,status:'open',result:null,bets:[]};
-setInterval(()=>{const now=Date.now();if(currentRouletteRound.status==='open'&&now>=currentRouletteRound.endsAt){currentRouletteRound.status='resolved';currentRouletteRound.result=Math.floor(Math.random()*37);currentRouletteRound.resolvedAt=now}else if(currentRouletteRound.status==='resolved'&&now-currentRouletteRound.resolvedAt>=5000){rouletteRoundSequence++;currentRouletteRound={id:rouletteRoundSequence,startedAt:now,endsAt:now+25000,status:'open',result:null,bets:[]}}},250);
+let currentRouletteRound={id:rouletteRoundSequence,startedAt:0,endsAt:0,status:'open',result:null,bets:[]};
+const gamePresence=new Map();
+const GAME_TYPES=['ladder','nvuti','crash','olympus','bandit','wheel','flip','dice','cups','mines','csgo'];
+setInterval(()=>{const now=Date.now();if(currentRouletteRound.status==='open'&&currentRouletteRound.endsAt>0&&now>=currentRouletteRound.endsAt){currentRouletteRound.status='resolved';currentRouletteRound.result=Math.floor(Math.random()*37);currentRouletteRound.resolvedAt=now}else if(currentRouletteRound.status==='resolved'&&now-currentRouletteRound.resolvedAt>=5000){rouletteRoundSequence++;currentRouletteRound={id:rouletteRoundSequence,startedAt:0,endsAt:0,status:'open',result:null,bets:[]}}for(const [type,players] of gamePresence){for(const [id,seen] of players){if(now-seen>45000)players.delete(id)}if(!players.size)gamePresence.delete(type)}},250);
 const ONLINE_TTL_MS = 60_000;
 
 const mime = {
@@ -410,6 +412,11 @@ http.createServer(async (req, res) => {
       res.writeHead(200);return res.end(JSON.stringify({success:true,amount:1000,remaining:50-start1Users.size}));
     });return;
   }
+  if (requestUrl.pathname === "/api/games/presence") {
+    res.setHeader("Content-Type","application/json; charset=utf-8");res.setHeader("Cache-Control","no-store");
+    if(req.method==='POST'){let body='';req.on('data',c=>{body+=c;if(body.length>2048)req.destroy()});req.on('end',()=>{let input;try{input=JSON.parse(body||'{}')}catch{res.writeHead(400);return res.end(JSON.stringify({error:'Invalid JSON'}))}const clientId=String(input.clientId||''),type=String(input.type||'');if(!registeredPlayers.has(clientId)||!GAME_TYPES.includes(type)){res.writeHead(400);return res.end(JSON.stringify({error:'Invalid game presence'}))}if(!gamePresence.has(type))gamePresence.set(type,new Map());gamePresence.get(type).set(clientId,Date.now());res.writeHead(200);return res.end(JSON.stringify({success:true}))});return}
+    if(req.method!=='GET'){res.writeHead(405,{Allow:'GET, POST'});return res.end(JSON.stringify({error:'Method not allowed'}))}const counts={};for(const type of GAME_TYPES)counts[type]=gamePresence.has(type)?gamePresence.get(type).size:0;res.writeHead(200);return res.end(JSON.stringify({counts}));
+  }
   if (requestUrl.pathname === "/api/roulette/round") {
     res.setHeader("Content-Type","application/json; charset=utf-8");res.setHeader("Cache-Control","no-store");
     if(req.method!=="GET"){res.writeHead(405,{Allow:"GET"});return res.end(JSON.stringify({error:"Method not allowed"}))}
@@ -421,10 +428,10 @@ http.createServer(async (req, res) => {
     let body="";req.on("data",c=>{body+=c;if(body.length>8192)req.destroy()});req.on("end",()=>{let input;try{input=JSON.parse(body||"{}")}catch{res.writeHead(400);return res.end(JSON.stringify({error:"Invalid JSON"}))}
       const clientId=String(input.clientId||""),amount=Number(input.amount),choices=Array.isArray(input.choices)?input.choices:[];
       if(!registeredPlayers.has(clientId)||!Number.isFinite(amount)||amount<1||!choices.length||choices.length>37){res.writeHead(400);return res.end(JSON.stringify({error:"Проверь сумму и исходы ставки"}))}
-      if(currentRouletteRound.status!=="open"||Date.now()>=currentRouletteRound.endsAt){res.writeHead(409);return res.end(JSON.stringify({error:"Ставки закрыты — дождись следующего раунда"}))}
+      if(currentRouletteRound.status!=="open"||(currentRouletteRound.endsAt>0&&Date.now()>=currentRouletteRound.endsAt)){res.writeHead(409);return res.end(JSON.stringify({error:"Ставки закрыты — дождись следующего раунда"}))}
       const allowed=new Set(["red","black","even","odd","range13","low","dozen1","range25","high","number","zero"]),clean=[];
       for(const c of choices){const kind=String(c.kind||""),number=Number(c.number);if(!allowed.has(kind)||(kind==="number"&&(!Number.isInteger(number)||number<0||number>36))){res.writeHead(400);return res.end(JSON.stringify({error:"Некорректный исход"}))}clean.push({kind,label:String(c.label||kind).slice(0,40),...(kind==="number"?{number}:{}),mult:kind==="number"?30:kind==="zero"?36:2})}
-      const p=registeredPlayers.get(clientId);currentRouletteRound.bets.push({clientId,username:p.username?"@"+p.username:p.name,amount:Math.round(amount*1000)/1000,choices:clean,createdAt:new Date().toISOString()});
+      const p=registeredPlayers.get(clientId);if(currentRouletteRound.endsAt===0){currentRouletteRound.startedAt=Date.now();currentRouletteRound.endsAt=currentRouletteRound.startedAt+25000}currentRouletteRound.bets.push({clientId,username:p.username?"@"+p.username:p.name,amount:Math.round(amount*1000)/1000,choices:clean,createdAt:new Date().toISOString()});
       res.writeHead(200);return res.end(JSON.stringify({accepted:true,round:{id:currentRouletteRound.id,endsAt:currentRouletteRound.endsAt}}));
     });return;
   }
