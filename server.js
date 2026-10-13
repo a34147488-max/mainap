@@ -119,6 +119,9 @@ http.createServer(async (req, res) => {
       const previous = registeredPlayers.get(clientId);
       const pendingCredits = previous ? Math.max(0, Number(previous.pendingCredits)||0) : 0;
       const creditedBalance = Math.round((balance + pendingCredits) * 1000) / 1000;
+      // Recover an active premium period if an older profile sync had erased its fields.
+      const usedPremiumPromo = Object.values(premiumPromos).find(x => x && x.usedBy === clientId && Number(x.usedAt || 0) + 7 * 86400000 > Date.now());
+      const recoveredPremiumStart = usedPremiumPromo ? Number(usedPremiumPromo.usedAt) : 0;
       const inviterId = referredBy ? ([...registeredPlayers.values()].find(p => p.id === referredBy || (p.telegramId && p.telegramId === referredBy)) || {}).id : "";
       const resolvedInviterId = previous ? (previous.referredBy || "") : (inviterId && inviterId !== clientId ? inviterId : "");
       if (!previous && resolvedInviterId && !referredPlayerIds.has(clientId)) {
@@ -138,10 +141,10 @@ http.createServer(async (req, res) => {
         pendingCredits: 0,
         totalWon: previous ? Math.max(previous.totalWon || 0, Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000)) : Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000),
         // Preserve server-owned premium state when the client refreshes player profile.
-        premiumUntil: previous ? Number(previous.premiumUntil || 0) : 0,
-        autoClickEarned: previous ? Number(previous.autoClickEarned || 0) : 0,
-        autoClickLastAt: previous ? Number(previous.autoClickLastAt || 0) : 0,
-        premiumStartedAt: previous ? Number(previous.premiumStartedAt || 0) : 0,
+        premiumUntil: Math.max(Number(previous && previous.premiumUntil || 0), recoveredPremiumStart ? recoveredPremiumStart + 7 * 86400000 : 0),
+        autoClickEarned: previous && previous.autoClickEarned !== undefined ? Number(previous.autoClickEarned || 0) : 0,
+        autoClickLastAt: Number(previous && previous.autoClickLastAt || recoveredPremiumStart || 0),
+        premiumStartedAt: Number(previous && previous.premiumStartedAt || recoveredPremiumStart || 0),
         registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
         lastSeen: Date.now()
       });
