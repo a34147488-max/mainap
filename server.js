@@ -15,6 +15,8 @@ app.use(express.static(__dirname));
 app.get('/health', (_req, res) => res.json({ ok: true, app: 'Бутылочка' }));
 
 const GIFT_CATALOG = [{id:'rose',name:'Роза',emoji:'🌹'},{id:'heart',name:'Сердце',emoji:'❤️'},{id:'chocolate',name:'Шоколад',emoji:'🍫'},{id:'teddy',name:'Мишка',emoji:'🧸'},{id:'crown',name:'Корона',emoji:'👑'},{id:'diamond',name:'Бриллиант',emoji:'💎'},{id:'ring',name:'Колечко',emoji:'💍'},{id:'bouquet',name:'Букет',emoji:'💐'},{id:'cake',name:'Торт',emoji:'🎂'},{id:'star',name:'Звезда',emoji:'⭐'},{id:'fire',name:'Огонь',emoji:'🔥'},{id:'moon',name:'Луна',emoji:'🌙'},{id:'sun',name:'Солнышко',emoji:'☀️'},{id:'cherry',name:'Вишенки',emoji:'🍒'},{id:'peach',name:'Персик',emoji:'🍑'},{id:'unicorn',name:'Единорог',emoji:'🦄'},{id:'gift',name:'Подарок',emoji:'🎁'},{id:'champagne',name:'Бокалы',emoji:'🥂'},{id:'sparkle',name:'Блеск',emoji:'✨'},{id:'trophy',name:'Кубок',emoji:'🏆'}].map(g=>({...g,price:25}));
+const channelBonusClaims=new Set();
+function dayKey(){return new Date().toISOString().slice(0,10)}
 function refreshCredits(u){const now=Date.now();if(u.credits==null){u.credits=100;u.creditUpdatedAt=now;return}const step=864000;const elapsed=Math.max(0,now-(u.creditUpdatedAt||now));const gained=Math.floor(elapsed/step);if(gained>0){u.credits=Math.min(100,u.credits+gained);u.creditUpdatedAt=u.credits===100?now:(u.creditUpdatedAt||now)+gained*step}}
 function publicUser(u){
   refreshCredits(u);
@@ -66,10 +68,26 @@ io.on('connection', socket => {
     users.set(socket.id, {
       id: socket.id, name, username: String(payload.username || tg.username || name).replace(/^@/, '').slice(0, 32),
       age, avatar: String(payload.avatar || tg.photo_url || '').slice(0, 500),
-      kisses: previous ? previous.kisses : 0, dislikes: previous ? previous.dislikes : 0, credits:previous ? previous.credits : 100, creditUpdatedAt:previous ? previous.creditUpdatedAt : Date.now(), gifts:previous ? previous.gifts||[] : [],
+      kisses: previous ? previous.kisses : 0, dislikes: previous ? previous.dislikes : 0, credits:previous ? previous.credits : 100, creditUpdatedAt:previous ? previous.creditUpdatedAt : Date.now(), gifts:previous ? previous.gifts||[] : [], telegramId:String(payload.telegramId||previous?.telegramId||'').slice(0,32), subscriptionBonusClaimed:previous ? !!previous.subscriptionBonusClaimed : false, dailyKisses:previous&&previous.dailyKissesDay===dayKey()?(previous.dailyKisses||0):0, dailyKissesDay:previous&&previous.dailyKissesDay===dayKey()?previous.dailyKissesDay:dayKey(), dailyKissBonusClaimed:previous&&previous.dailyKissesDay===dayKey()?!!previous.dailyKissBonusClaimed:false,
       joinedAt: previous ? previous.joinedAt : Date.now(), roomId: null
     });
     cb({ ok: true, user: publicUser(users.get(socket.id)) });
+  });
+  socket.on('profile:change', (payload={},cb=()=>{})=>{
+    const u=users.get(socket.id);if(!u)return cb({ok:false,error:'Сначала создай профиль.'});refreshCredits(u);
+    const field=String(payload.field||'');const value=String(payload.value||'').trim();
+    if(!['name','age'].includes(field))return cb({ok:false,error:'Можно изменить только никнейм или возраст.'});
+    if(u.credits<25)return cb({ok:false,error:'Нужно 25 кредитов.'});
+    if(field==='name'){if(!value||value.length>24)return cb({ok:false,error:'Никнейм должен быть от 1 до 24 символов.'});u.name=value;}
+    else {const age=Number(value);if(!Number.isInteger(age)||age<13||age>99)return cb({ok:false,error:'Возраст должен быть от 13 до 99 лет.'});u.age=age;}
+    u.credits-=25;cb({ok:true,user:publicUser(u)});
+  });
+  socket.on('bonus:channel:claim',async (_payload={},cb=()=>{})=>{
+    const u=users.get(socket.id);if(!u)return cb({ok:false,error:'Сначала создай профиль.'});
+    if(!u.telegramId)return cb({ok:false,error:'Открой игру внутри Telegram, чтобы проверить подписку.'});
+    if(u.subscriptionBonusClaimed||channelBonusClaims.has(u.telegramId))return cb({ok:false,message:'Бонус за подписку уже получен. Повторно получить его нельзя.'});
+    if(!process.env.TELEGRAM_BOT_TOKEN)return cb({ok:false,message:'Проверка подписки пока не настроена. Администратору нужно добавить TELEGRAM_BOT_TOKEN в Railway и дать боту права администратора канала.'});
+    try{const response=await fetch('https://api.telegram.org/bot'+process.env.TELEGRAM_BOT_TOKEN+'/getChatMember?chat_id=@vkcoinnew&user_id='+encodeURIComponent(u.telegramId));const data=await response.json();if(!data.ok)return cb({ok:false,error:'Telegram не смог проверить подписку. Проверь права бота в канале.'});const status=data.result&&data.result.status;if(!['member','administrator','creator'].includes(status))return cb({ok:false,message:'Подписка не найдена. Подпишись на @vkcoinnew и попробуй снова.'});u.credits=Math.min(100,u.credits+50);u.subscriptionBonusClaimed=true;channelBonusClaims.add(u.telegramId);cb({ok:true,credits:u.credits,message:'Подписка подтверждена! Начислено 50 кредитов.'});}catch(e){cb({ok:false,error:'Не удалось проверить подписку. Попробуй позже.'})}
   });
   socket.on('tops:list', (cb = () => {}) => {
     if(typeof cb!=='function') return;
@@ -163,7 +181,7 @@ io.on('connection', socket => {
     if (!room.players.has(targetId) || targetId === socket.id) return cb({ ok: false, error: 'Выбери другого участника за столом.' });
     if (!['kiss', 'dislike'].includes(kind)) return cb({ ok: false, error: 'Выбери поцелуй или дизлайк.' });
     const picker = room.players.get(socket.id), target = room.players.get(targetId);
-    if (kind === 'kiss') target.kisses++; else target.dislikes++;
+    if (kind === 'kiss') { target.kisses++; if(target.dailyKissesDay!==dayKey()){target.dailyKissesDay=dayKey();target.dailyKisses=0;target.dailyKissBonusClaimed=false;} target.dailyKisses=(target.dailyKisses||0)+1; if(target.dailyKisses>50&&!target.dailyKissBonusClaimed){target.credits=100;target.dailyKissBonusClaimed=true;io.to(target.id).emit('credits:updated',{userId:target.id,credits:100,reason:'daily-kisses'});} } else target.dislikes++;
     room.lastResult = { picker: publicUser(picker), target: publicUser(target), kind, at: Date.now() };
     room.currentPicker = null; room.targetId = null;
     io.to(room.id).emit('turn:result', room.lastResult);
