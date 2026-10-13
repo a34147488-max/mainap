@@ -22,10 +22,10 @@ const GIFT_CATALOG = [{id:'rose',name:'Роза',emoji:'🌹'},{id:'heart',name:
 const channelBonusClaims=new Set();
 function dayKey(){return new Date().toISOString().slice(0,10)}
 function refreshCredits(u){const now=Date.now();if(u.credits==null){u.credits=100;u.creditUpdatedAt=now;return}const step=864000;const elapsed=Math.max(0,now-(u.creditUpdatedAt||now));const gained=Math.floor(elapsed/step);if(gained>0){u.credits=Math.min(100,u.credits+gained);u.creditUpdatedAt=u.credits===100?now:(u.creditUpdatedAt||now)+gained*step}}
-function accountId(u){return u.telegramId?'tg:'+String(u.telegramId):'socket:'+String(u.id)}
-function serializableUser(u){return {name:u.name,username:u.username,age:u.age,avatar:u.avatar,kisses:u.kisses||0,dislikes:u.dislikes||0,credits:u.credits??100,creditUpdatedAt:u.creditUpdatedAt||Date.now(),gifts:u.gifts||[],telegramId:u.telegramId||'',subscriptionBonusClaimed:!!u.subscriptionBonusClaimed,dailyKisses:u.dailyKisses||0,dailyKissesDay:u.dailyKissesDay||dayKey(),dailyKissBonusClaimed:!!u.dailyKissBonusClaimed,joinedAt:u.joinedAt||Date.now()}}
-async function persistUser(u){if(!pool||!u||!u.telegramId)return;const id=accountId(u),profile=serializableUser(u);savedProfiles.set(id,profile);try{await dbReady;await pool.query('INSERT INTO game_profiles(account_id,profile,updated_at) VALUES($1,$2::jsonb,NOW()) ON CONFLICT(account_id) DO UPDATE SET profile=EXCLUDED.profile,updated_at=NOW()',[id,JSON.stringify(profile)])}catch(e){console.error('Profile save failed:',e.message)}}
-async function getSavedProfile(telegramId){if(!pool||!telegramId)return null;await dbReady;const id='tg:'+String(telegramId);const r=await pool.query('SELECT profile FROM game_profiles WHERE account_id=$1',[id]);if(r.rows[0]){savedProfiles.set(id,r.rows[0].profile);return r.rows[0].profile}return null}
+function accountId(u){return u.telegramId?'tg:'+String(u.telegramId):u.clientId?'web:'+String(u.clientId):'socket:'+String(u.id)}
+function serializableUser(u){return {name:u.name,username:u.username,age:u.age,avatar:u.avatar,kisses:u.kisses||0,dislikes:u.dislikes||0,credits:u.credits??100,creditUpdatedAt:u.creditUpdatedAt||Date.now(),gifts:u.gifts||[],telegramId:u.telegramId||'',clientId:u.clientId||'',subscriptionBonusClaimed:!!u.subscriptionBonusClaimed,dailyKisses:u.dailyKisses||0,dailyKissesDay:u.dailyKissesDay||dayKey(),dailyKissBonusClaimed:!!u.dailyKissBonusClaimed,joinedAt:u.joinedAt||Date.now()}}
+async function persistUser(u){if(!pool||!u||(!u.telegramId&&!u.clientId))return;const id=accountId(u),profile=serializableUser(u);savedProfiles.set(id,profile);try{await dbReady;await pool.query('INSERT INTO game_profiles(account_id,profile,updated_at) VALUES($1,$2::jsonb,NOW()) ON CONFLICT(account_id) DO UPDATE SET profile=EXCLUDED.profile,updated_at=NOW()',[id,JSON.stringify(profile)])}catch(e){console.error('Profile save failed:',e.message)}}
+async function getSavedProfile(telegramId,clientId){if(!pool||(!telegramId&&!clientId))return null;await dbReady;const ids=[...(telegramId?['tg:'+String(telegramId)]:[]),...(clientId?['web:'+String(clientId)]:[])];for(const id of ids){const r=await pool.query('SELECT profile FROM game_profiles WHERE account_id=$1',[id]);if(r.rows[0]){savedProfiles.set(id,r.rows[0].profile);return r.rows[0].profile}}return null}
 async function getSavedFriendIds(u){if(!pool||!u.telegramId)return [];await dbReady;const r=await pool.query('SELECT friend_account_id FROM game_friendships WHERE account_id=$1',[accountId(u)]);return r.rows.map(x=>x.friend_account_id)}
 function publicUser(u){
   refreshCredits(u);
@@ -72,13 +72,15 @@ io.on('connection', socket => {
     if (!name) return cb({ ok: false, error: 'Укажи никнейм.' });
     if (!Number.isInteger(age) || age < 13 || age > 99) return cb({ ok: false, error: 'Укажи возраст от 13 до 99 лет.' });
     await dbReady;
-    const previous = users.get(socket.id) || await getSavedProfile(payload.telegramId||'');
+    const clientId=String(payload.clientId||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80);
+    if(!payload.telegramId&&!clientId)return cb({ok:false,error:'Не удалось определить ID профиля. Обнови страницу и попробуй снова.'});
+    const previous = users.get(socket.id) || await getSavedProfile(payload.telegramId||'',clientId);
     if (previous && previous.roomId) leaveRoom(socket);
     const tg = payload.telegram || {};
     users.set(socket.id, {
       id: socket.id, name, username: String(payload.username || tg.username || name).replace(/^@/, '').slice(0, 32),
       age, avatar: String(payload.avatar || tg.photo_url || '').slice(0, 500),
-      kisses: previous ? previous.kisses : 0, dislikes: previous ? previous.dislikes : 0, credits:previous ? previous.credits : 100, creditUpdatedAt:previous ? previous.creditUpdatedAt : Date.now(), gifts:previous ? previous.gifts||[] : [], telegramId:String(payload.telegramId||previous?.telegramId||'').slice(0,32), subscriptionBonusClaimed:previous ? !!previous.subscriptionBonusClaimed : false, dailyKisses:previous&&previous.dailyKissesDay===dayKey()?(previous.dailyKisses||0):0, dailyKissesDay:previous&&previous.dailyKissesDay===dayKey()?previous.dailyKissesDay:dayKey(), dailyKissBonusClaimed:previous&&previous.dailyKissesDay===dayKey()?!!previous.dailyKissBonusClaimed:false,
+      kisses: previous ? previous.kisses : 0, dislikes: previous ? previous.dislikes : 0, credits:previous ? previous.credits : 100, creditUpdatedAt:previous ? previous.creditUpdatedAt : Date.now(), gifts:previous ? previous.gifts||[] : [], telegramId:String(payload.telegramId||previous?.telegramId||'').slice(0,32), clientId:clientId||previous?.clientId||'', subscriptionBonusClaimed:previous ? !!previous.subscriptionBonusClaimed : false, dailyKisses:previous&&previous.dailyKissesDay===dayKey()?(previous.dailyKisses||0):0, dailyKissesDay:previous&&previous.dailyKissesDay===dayKey()?previous.dailyKissesDay:dayKey(), dailyKissBonusClaimed:previous&&previous.dailyKissesDay===dayKey()?!!previous.dailyKissBonusClaimed:false,
       joinedAt: previous ? previous.joinedAt : Date.now(), roomId: null
     });
     await persistUser(users.get(socket.id));
