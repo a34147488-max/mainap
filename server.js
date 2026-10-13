@@ -137,6 +137,11 @@ http.createServer(async (req, res) => {
         balance: creditedBalance,
         pendingCredits: 0,
         totalWon: previous ? Math.max(previous.totalWon || 0, Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000)) : Math.max(0, Math.round(Number(input.totalWon || 0) * 1000) / 1000),
+        // Preserve server-owned premium state when the client refreshes player profile.
+        premiumUntil: previous ? Number(previous.premiumUntil || 0) : 0,
+        autoClickEarned: previous ? Number(previous.autoClickEarned || 0) : 0,
+        autoClickLastAt: previous ? Number(previous.autoClickLastAt || 0) : 0,
+        premiumStartedAt: previous ? Number(previous.premiumStartedAt || 0) : 0,
         registeredAt: previous ? previous.registeredAt : new Date().toISOString(),
         lastSeen: Date.now()
       });
