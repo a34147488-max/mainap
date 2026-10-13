@@ -23,6 +23,18 @@ try {
 function persistPlayerData() {
   try { fs.writeFileSync(PLAYER_DATA_FILE, JSON.stringify({players:[...registeredPlayers.values()], transfers:playerTransfers.slice(0,1000), referredPlayerIds:[...referredPlayerIds], marketListings, marketHistory:marketHistory.slice(-300)})); } catch (e) { console.error('Could not persist player data:', e.message); }
 }
+// One-time recovery for transfers created before pending recipient credits existed.
+// Older profile syncs could overwrite the recipient's server balance with stale browser data.
+let recoveredTransferCredits = false;
+for (const transfer of playerTransfers) {
+  if (!transfer || transfer.creditQueued || !transfer.recipientId) continue;
+  const recipient = registeredPlayers.get(transfer.recipientId);
+  if (!recipient) continue;
+  recipient.pendingCredits = Math.round(((Number(recipient.pendingCredits) || 0) + Number(transfer.amount || 0)) * 1000) / 1000;
+  transfer.creditQueued = true;
+  recoveredTransferCredits = true;
+}
+if (recoveredTransferCredits) persistPlayerData();
 const START1_FILE = path.join(root, '.start1-activations.json');
 let savedStart1Users=[];try{savedStart1Users=JSON.parse(fs.readFileSync(START1_FILE,'utf8'))}catch{}
 const start1Users = new Set(Array.isArray(savedStart1Users)?savedStart1Users:[]);
@@ -214,7 +226,7 @@ http.createServer(async (req, res) => {
       // local-first; without this pending credit, a stale client balance overwrites the transfer.
       recipient.balance=Math.round((recipient.balance+amount)*1000)/1000;
       recipient.pendingCredits=Math.round(((Number(recipient.pendingCredits)||0)+amount)*1000)/1000;
-      const entry={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),senderId,recipientId:recipient.id,amount,createdAt:new Date().toISOString(),senderName:sender.name,recipientName:recipient.name};
+      const entry={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),senderId,recipientId:recipient.id,amount,createdAt:new Date().toISOString(),senderName:sender.name,recipientName:recipient.name,creditQueued:true};
       playerTransfers.unshift(entry); if(playerTransfers.length>1000)playerTransfers.length=1000;
       persistPlayerData();
       res.writeHead(200); return res.end(JSON.stringify({success:true,amount,recipient:{name:recipient.name,username:recipient.username||"",balance:recipient.balance},sender:{balance:sender.balance}}));
