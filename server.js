@@ -63,8 +63,36 @@ if (!process.env.RAILWAY_VOLUME_MOUNT_PATH && !process.env.VKCOIN_DATA_DIR) {
 for (const code of PREMIUM_CODES) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 for (const code of PREMIUM_CODES_NEW) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 function savePremiumPromos(){ fs.writeFileSync(PREMIUM_FILE, JSON.stringify(premiumPromos, null, 2)); }
-// Always derive the premium expiry from the redeemed promo record as a fallback.
-// This prevents a normal player profile sync from hiding an actually activated PREMIUM.
+// One-time cleanup: only @danek7571 keeps PREMIUM; promo codes already redeemed by others stay consumed.
+const PREMIUM_RESET_MARKER = path.join(PREMIUM_DATA_DIR, '.premium-reset-20261013.done');
+if (!fs.existsSync(PREMIUM_RESET_MARKER)) {
+  const premiumResetAt = Date.parse("2026-10-20T12:53:00+05:00");
+  const targetPlayers = [...registeredPlayers.values()].filter(p => String(p.username || "").replace(/^@/, "").toLowerCase() === "danek7571");
+  const targetIds = new Set(targetPlayers.map(p => p.id));
+  for (const p of registeredPlayers.values()) {
+    if (targetIds.has(p.id)) {
+      p.premiumUntil = premiumResetAt;
+      p.premiumStartedAt = Date.now();
+      p.autoClickEarned = Number(p.autoClickEarned || 0);
+      p.autoClickLastAt = Date.now();
+    } else {
+      p.premiumUntil = 0;
+      p.premiumStartedAt = 0;
+      p.autoClickEarned = 0;
+      p.autoClickLastAt = 0;
+    }
+  }
+  for (const record of Object.values(premiumPromos)) {
+    if (record && record.usedBy && !targetIds.has(record.usedBy)) record.usedAt = 0;
+  }
+  try {
+    fs.mkdirSync(PREMIUM_DATA_DIR, { recursive: true });
+    fs.writeFileSync(PREMIUM_FILE, JSON.stringify(premiumPromos, null, 2));
+    persistPlayerData();
+    fs.writeFileSync(PREMIUM_RESET_MARKER, new Date().toISOString());
+  } catch (e) { console.error("Could not complete one-time PREMIUM cleanup:", e.message); }
+}
+// Redeemed codes remain marked used; their cleared usedAt values cannot restore old subscriptions.
 function getPremiumUntil(player){
   if(!player) return 0;
   const stored=Number(player.premiumUntil||0);
