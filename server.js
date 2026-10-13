@@ -29,10 +29,10 @@ const start1Users = new Set(Array.isArray(savedStart1Users)?savedStart1Users:[])
 const PREMIUM_FILE = path.join(root, '.premium-promos.json');
 const PREMIUM_CODES = ['VKC-PREM-7D-A7K2','VKC-PREM-7D-M4Q9','VKC-PREM-7D-R8T3','VKC-PREM-7D-C6W1','VKC-PREM-7D-P2N5','VKC-PREM-7D-H9D4','VKC-PREM-7D-X3B7','VKC-PREM-7D-F5L8','VKC-PREM-7D-J1S6','VKC-PREM-7D-Z7G2'];
 const PREMIUM_CODES_NEW = ["VKC-PREM-7D-Q8M2","VKC-PREM-7D-B4T9","VKC-PREM-7D-L6R3","VKC-PREM-7D-W2K7","VKC-PREM-7D-D9F5","VKC-PREM-7D-Y3H8","VKC-PREM-7D-C7N4","VKC-PREM-7D-G5P1","VKC-PREM-7D-T8V6","VKC-PREM-7D-Z4X2"];
-for (const code of PREMIUM_CODES_NEW) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 let premiumPromos = {};
 try { premiumPromos = JSON.parse(fs.readFileSync(PREMIUM_FILE, 'utf8')); } catch {}
 for (const code of PREMIUM_CODES) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
+for (const code of PREMIUM_CODES_NEW) if (!premiumPromos[code]) premiumPromos[code] = { usedBy: null, usedAt: null };
 function savePremiumPromos(){ fs.writeFileSync(PREMIUM_FILE, JSON.stringify(premiumPromos, null, 2)); }
 const OBnova_FILE = path.join(root, '.obnova-activations.json');
 let savedObnovaUsers=[];try{savedObnovaUsers=JSON.parse(fs.readFileSync(OBnova_FILE,'utf8'))}catch{}
